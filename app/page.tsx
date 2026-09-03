@@ -1,69 +1,135 @@
-import Image from "next/image";
+// app/page.tsx
+import { PrismaClient, Prisma } from '@prisma/client';
+import FilterBar from '@/components/FilterBar';
+import Pagination from '@/components/Pagination';
+import TweetGridCard from '@/components/TweetGridCard';
 
-export default function Home() {
+const prisma = new PrismaClient();
+const PAGE_SIZE = 12;
+
+interface PageProps {
+  searchParams: Promise<{
+    page?: string;
+    q?: string;
+    tag?: string;
+    artist?: string;
+    translator?: string;
+    sort?: string;
+  }>;
+}
+
+export default async function HomePage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const currentPage = Number(params.page) || 1;
+  const searchQuery = params.q || '';
+  const tagSlug = params.tag || '';
+  const artistHandle = params.artist || '';
+  const translatorHandle = params.translator || '';
+  const sortBy = params.sort === 'oldest' ? 'asc' : 'desc';
+
+  const where: Prisma.TranslatedPostWhereInput = {};
+  const originalPostWhere: Prisma.OriginalPostWhereInput = {};
+
+  if (searchQuery) {
+    where.OR = [
+      { content: { contains: searchQuery, mode: 'insensitive' } },
+      { originalPost: { content: { contains: searchQuery, mode: 'insensitive' } } },
+    ];
+  }
+
+  if (translatorHandle && translatorHandle !== 'all') {
+    where.translator = { handle: translatorHandle };
+  }
+
+  if (artistHandle && artistHandle !== 'all') {
+    originalPostWhere.artist = { handle: artistHandle };
+  }
+
+  if (tagSlug && tagSlug !== 'all') {
+    originalPostWhere.tags = { some: { tag: { slug: tagSlug } } };
+  }
+
+  if (Object.keys(originalPostWhere).length > 0) {
+    where.originalPost = originalPostWhere;
+  }
+
+  const [totalCount, posts, allTags, artists, translators] = await Promise.all([
+    prisma.translatedPost.count({ where }),
+    prisma.translatedPost.findMany({
+      where,
+      skip: (currentPage - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      orderBy: { postedAt: sortBy },
+      include: {
+        translator: true,
+        originalPost: {
+          include: {
+            artist: true,
+            tags: { include: { tag: true } },
+          },
+        },
+      },
+    }),
+    prisma.tag.findMany({ orderBy: { name: 'asc' } }),
+    prisma.creator.findMany({
+      where: { originalPosts: { some: {} } },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.creator.findMany({
+      where: { translatedPosts: { some: {} } },
+      orderBy: { name: 'asc' },
+    }),
+  ]);
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="min-h-screen bg-[#0b1622] text-[#bcbedc] px-4 sm:px-8 md:px-12 py-8">
+      {/* Header Bar AniList */}
+      <div className="flex items-center justify-between mb-8 pb-4 border-b border-[#1e2d42]">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-[#3db4f2] flex items-center justify-center font-black text-white text-xl shadow-lg shadow-[#3db4f2]/30">
+            U
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-white tracking-wide">UmaIndex</h1>
+            <p className="text-xs text-[#8ba0b2]">Uma Musume Translated Comic Archive</p>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+
+        <div className="text-xs font-semibold text-[#8ba0b2] bg-[#151f2e] px-3.5 py-1.5 rounded-full border border-[#27364b]">
+          Total: <span className="text-[#3db4f2] font-bold">{totalCount}</span> Comics
+        </div>
+      </div>
+
+      {/* Filter Bar */}
+      <FilterBar tags={allTags} artists={artists} translators={translators} />
+
+      {/* Grid Manga: 3 đến 4 cột giúp tranh to rõ */}
+      {posts.length === 0 ? (
+        <div className="text-center py-20 bg-[#151f2e] rounded-xl border border-[#1e2d42]">
+          <p className="text-lg text-[#8ba0b2]">No translated manga found.</p>
+          <p className="text-sm text-[#5a6f82] mt-1">Try resetting or adjusting the filters.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
+          {posts.map((post) => (
+            <TweetGridCard
+              key={post.id}
+              origId={post.originalPost.tweetId}
+              transId={post.tweetId}
+              artistName={post.originalPost.artist.name}
+              translatorName={post.translator.handle}
+              language={post.language}
+              tags={post.originalPost.tags.map((pt) => pt.tag)}
+              postedAt={post.postedAt}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          ))}
         </div>
-      </main>
-    </div>
+      )}
+
+      {/* Phân trang */}
+      <Pagination currentPage={currentPage} totalPages={totalPages} />
+    </main>
   );
 }
