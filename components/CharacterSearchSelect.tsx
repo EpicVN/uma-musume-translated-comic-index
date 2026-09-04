@@ -2,7 +2,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { usePageNavigation } from "./PageLoadingOverlay";
 
 interface Tag {
   id: string;
@@ -20,8 +21,8 @@ export default function CharacterSearchSelect({
   tags,
   selectedSlug,
 }: CharacterSearchSelectProps) {
-  const router = useRouter();
   const searchParams = useSearchParams();
+  const { navigate, isPending } = usePageNavigation();
 
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -58,7 +59,7 @@ export default function CharacterSearchSelect({
       params.delete("tag");
     }
     params.set("page", "1");
-    router.push(`/?${params.toString()}`);
+    navigate(`/?${params.toString()}`);
     setIsOpen(false);
     setQuery("");
   };
@@ -67,8 +68,9 @@ export default function CharacterSearchSelect({
     <div className="relative w-full" ref={containerRef}>
       <button
         type="button"
+        disabled={isPending}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full h-10 px-3 rounded-lg bg-[#0b1622] border border-[#27364b] hover:border-[#3db4f2]/70 text-left text-xs text-white flex items-center justify-between transition focus:outline-none focus:border-[#3db4f2]"
+        className="w-full h-10 px-3 rounded-lg bg-[#0b1622] border border-[#27364b] hover:border-[#3db4f2]/70 text-left text-xs text-white flex items-center justify-between transition focus:outline-none focus:border-[#3db4f2] disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <span className="truncate pr-2">
           {activeTag ? activeTag.name : "Any Character"}
@@ -82,16 +84,17 @@ export default function CharacterSearchSelect({
             <input
               type="text"
               autoFocus
+              disabled={isPending}
               placeholder="Search character name..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-md bg-[#151f2e] border border-[#27364b] text-xs text-white placeholder-[#5a6f82] focus:outline-none focus:border-[#3db4f2]"
+              className="w-full px-2.5 py-1.5 rounded-md bg-[#151f2e] border border-[#27364b] text-xs text-white placeholder-[#5a6f82] focus:outline-none focus:border-[#3db4f2] disabled:opacity-50"
             />
           </div>
 
           <div className="max-h-60 overflow-y-auto py-1 divide-y divide-[#1e2d42]/40 text-xs">
             <div
-              onClick={() => handleSelect("all")}
+              onClick={() => !isPending && handleSelect("all")}
               className={`px-3 py-2 cursor-pointer transition hover:bg-[#151f2e] hover:text-[#3db4f2] ${
                 !selectedSlug || selectedSlug === "all"
                   ? "text-[#3db4f2] font-bold bg-[#151f2e]/60"
@@ -109,7 +112,7 @@ export default function CharacterSearchSelect({
               filteredTags.map((tag) => (
                 <div
                   key={tag.id}
-                  onClick={() => handleSelect(tag.slug)}
+                  onClick={() => !isPending && handleSelect(tag.slug)}
                   className={`px-3 py-2 cursor-pointer transition hover:bg-[#151f2e] flex items-center justify-between gap-2 ${
                     selectedSlug === tag.slug
                       ? "text-[#3db4f2] font-semibold bg-[#151f2e]/80"

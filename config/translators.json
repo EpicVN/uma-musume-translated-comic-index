@@ -1,0 +1,82 @@
+[
+    {
+        "name": "KuwaidenTL",
+        "handle": "Kuwaiden",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "EpicVN",
+        "handle": "EDemocraft",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "Aceinflame31",
+        "handle": "RyuGun317",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "Akashi",
+        "handle": "AkashiKishino15",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "Onesnab",
+        "handle": "01s_nab23",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "dayskie",
+        "handle": "dayskiie",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "SyncBushido",
+        "handle": "SyncBushido",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "Milky Orange",
+        "handle": "aomiruki",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    }
+]

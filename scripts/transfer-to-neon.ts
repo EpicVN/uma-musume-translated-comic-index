@@ -5,7 +5,7 @@ import { PrismaClient as NeonPrisma } from "@prisma/client";
 const LOCAL_DB_URL =
   "postgresql://postgres:123456@127.0.0.1:5432/comic_indexer?schema=public";
 
-// Dùng Direct URL (bỏ -pooler) để import script mượt mà
+// Use Direct URL (without '-pooler') for smooth bulk script migration
 const NEON_DB_URL =
   "postgresql://neondb_owner:npg_2n3fTOjaEZSQ@ep-aged-brook-b3m0gqdb.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
 
@@ -17,10 +17,10 @@ const neonClient = new NeonPrisma({
 });
 
 async function transfer() {
-  console.log("🚀 Bắt đầu chuyển dữ liệu từ Local lên Neon...");
+  console.log("🚀 Starting data migration from Local to Neon DB...");
 
-  // 1. Chuyển bảng Creator (Artist & Translator)
-  console.log("📦 Đang chuyển Creator...");
+  // 1. Migrate Creator table (Artists & Translators)
+  console.log("📦 Migrating Creators...");
   const creators = await localClient.creator.findMany();
   for (const item of creators) {
     await neonClient.creator.upsert({
@@ -29,10 +29,10 @@ async function transfer() {
       create: item,
     });
   }
-  console.log(`✅ Đã chuyển ${creators.length} Creator.`);
+  console.log(`✅ Migrated ${creators.length} Creators.`);
 
-  // 2. Chuyển bảng Tag (Nhân vật)
-  console.log("📦 Đang chuyển Tag...");
+  // 2. Migrate Tag table (Characters)
+  console.log("📦 Migrating Tags...");
   const tags = await localClient.tag.findMany();
   for (const item of tags) {
     await neonClient.tag.upsert({
@@ -41,10 +41,10 @@ async function transfer() {
       create: item,
     });
   }
-  console.log(`✅ Đã chuyển ${tags.length} Tag.`);
+  console.log(`✅ Migrated ${tags.length} Tags.`);
 
-  // 3. Chuyển OriginalPost
-  console.log("📦 Đang chuyển OriginalPost...");
+  // 3. Migrate OriginalPost table
+  console.log("📦 Migrating OriginalPosts...");
   const originalPosts = await localClient.originalPost.findMany();
   for (const item of originalPosts) {
     await neonClient.originalPost.upsert({
@@ -53,10 +53,10 @@ async function transfer() {
       create: item,
     });
   }
-  console.log(`✅ Đã chuyển ${originalPosts.length} OriginalPost.`);
+  console.log(`✅ Migrated ${originalPosts.length} OriginalPosts.`);
 
-  // 4. Chuyển TranslatedPost
-  console.log("📦 Đang chuyển TranslatedPost...");
+  // 4. Migrate TranslatedPost table
+  console.log("📦 Migrating TranslatedPosts...");
   const translatedPosts = await localClient.translatedPost.findMany();
   for (const item of translatedPosts) {
     await neonClient.translatedPost.upsert({
@@ -65,12 +65,12 @@ async function transfer() {
       create: item,
     });
   }
-  console.log(`✅ Đã chuyển ${translatedPosts.length} TranslatedPost.`);
+  console.log(`✅ Migrated ${translatedPosts.length} TranslatedPosts.`);
 
-  // 5. Chuyển quan hệ gán Tag (PostTag)
+  // 5. Migrate Post-Tag relationship table (PostTag)
   try {
     if (localClient.postTag) {
-      console.log("📦 Đang chuyển PostTag...");
+      console.log("📦 Migrating PostTag associations...");
 
       const postTags = await localClient.postTag.findMany();
 
@@ -81,19 +81,19 @@ async function transfer() {
         skipDuplicates: true,
       });
 
-      console.log(`✅ Đã nạp ${result.count} liên kết PostTag.`);
+      console.log(`✅ Seeded ${result.count} PostTag associations.`);
     }
   } catch (err) {
-    console.error("⚠️ Lỗi chuyển bảng PostTag:", err);
+    console.error("⚠️ Error migrating PostTag table:", err);
   }
 
-  console.log("\n🎉 HOÀN TẤT ĐỒNG BỘ TOÀN BỘ DỮ LIỆU TỪ LOCAL LÊN NEON!");
+  console.log("\n🎉 FULL DATA MIGRATION FROM LOCAL TO NEON COMPLETED!");
 }
 
-// Gọi hàm ở cấp root ngoài cùng
+// Execute transfer at root level
 transfer()
   .catch((e) => {
-    console.error("Lỗi đồng bộ:", e);
+    console.error("Migration error:", e);
     process.exit(1);
   })
   .finally(async () => {

@@ -1,33 +1,34 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import type { Metadata } from 'next';
+import './globals.css';
+import NextTopLoader from 'nextjs-toploader';
+import PageLoadingOverlay from '@/components/PageLoadingOverlay';
 
 export const metadata: Metadata = {
-  title: "UmaIndex - Uma Musume Translated Comic Archives",
-  description: "Track and browse translated Uma Musume manga tweets",
-  icons: {
-    icon: "/logo.png", // Trỏ thẳng vào ảnh trong thư mục public
-    apple: "/logo.png",
-  },
+  title: 'UmaIndex - Uma Musume Translated Comic Archive',
+  description: 'Archive of translated Uma Musume comics from X (Twitter)',
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en">
+      <body className="bg-[#0b1622] text-[#bcbec0] min-h-screen">
+        <NextTopLoader
+          color="#3db4f2"
+          initialPosition={0.08}
+          crawlSpeed={200}
+          height={3}
+          crawl={true}
+          showSpinner={false}
+          shadow="0 0 10px #3db4f2, 0 0 5px #3db4f2"
+        />
+        <PageLoadingOverlay>
+          {children}
+        </PageLoadingOverlay>
+      </body>
     </html>
   );
 }

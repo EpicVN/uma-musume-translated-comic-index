@@ -1,20 +1,22 @@
 // scripts/sync-content.ts
-import { PrismaClient } from '@prisma/client';
-import { getTweet } from 'react-tweet/api';
+import { PrismaClient } from "@prisma/client";
+import { getTweet } from "react-tweet/api";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🔄 Đang quét các bài post có content bị null...');
+  console.log("🔄 Scanning posts with missing or empty content...");
 
-  // 1. Tìm tất cả TranslatedPost chưa có content
+  // 1. Fetch all TranslatedPost records missing content
   const translatedPosts = await prisma.translatedPost.findMany({
     where: {
-      OR: [{ content: null }, { content: '' }],
+      OR: [{ content: null }, { content: "" }],
     },
   });
 
-  console.log(`Tìm thấy ${translatedPosts.length} bài TranslatedPost cần cập nhật.`);
+  console.log(
+    `Found ${translatedPosts.length} TranslatedPost records requiring update.`,
+  );
 
   for (const post of translatedPosts) {
     try {
@@ -24,21 +26,25 @@ async function main() {
           where: { id: post.id },
           data: { content: tweet.text },
         });
-        console.log(`✅ Đã cập nhật TransPost [${post.tweetId}]: ${tweet.text.slice(0, 40)}...`);
+        console.log(
+          `✅ Updated TransPost [${post.tweetId}]: ${tweet.text.slice(0, 40)}...`,
+        );
       }
     } catch (err) {
-      console.error(`❌ Lỗi fetch tweet [${post.tweetId}]:`, err);
+      console.error(`❌ Error fetching tweet [${post.tweetId}]:`, err);
     }
   }
 
-  // 2. Tìm tất cả OriginalPost chưa có content
+  // 2. Fetch all OriginalPost records missing content
   const originalPosts = await prisma.originalPost.findMany({
     where: {
-      OR: [{ content: null }, { content: '' }],
+      OR: [{ content: null }, { content: "" }],
     },
   });
 
-  console.log(`Tìm thấy ${originalPosts.length} bài OriginalPost cần cập nhật.`);
+  console.log(
+    `Found ${originalPosts.length} OriginalPost records requiring update.`,
+  );
 
   for (const post of originalPosts) {
     try {
@@ -48,19 +54,21 @@ async function main() {
           where: { id: post.id },
           data: { content: tweet.text },
         });
-        console.log(`✅ Đã cập nhật OrigPost [${post.tweetId}]: ${tweet.text.slice(0, 40)}...`);
+        console.log(
+          `✅ Updated OrigPost [${post.tweetId}]: ${tweet.text.slice(0, 40)}...`,
+        );
       }
     } catch (err) {
-      console.error(`❌ Lỗi fetch tweet gốc [${post.tweetId}]:`, err);
+      console.error(`❌ Error fetching original tweet [${post.tweetId}]:`, err);
     }
   }
 
-  console.log('🎉 Hoàn tất đồng bộ toàn bộ content!');
+  console.log("🎉 Successfully synced all post content!");
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error("Execution error:", e);
     process.exit(1);
   })
   .finally(async () => {

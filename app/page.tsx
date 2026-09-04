@@ -1,4 +1,3 @@
-// app/page.tsx
 import Image from "next/image";
 import { PrismaClient, Prisma } from "@prisma/client";
 import FilterBar from "@/components/FilterBar";
@@ -91,12 +90,12 @@ export default async function HomePage({ searchParams }: PageProps) {
 
   return (
     <main className="min-h-screen bg-[#0b1622] text-[#bcbedc] px-4 sm:px-8 md:px-12 py-8">
-      {/* Header Bar AniList */}
+      {/* Header Bar */}
       <Link
         href="/"
         className="group inline-flex items-center gap-3.5 select-none transition-all duration-200"
       >
-        {/* Logo Icon có hiệu ứng hover border và shadow */}
+        {/* Logo Icon */}
         <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-[#27364b] bg-[#0b1622] shrink-0 shadow-sm transition-all duration-300 group-hover:border-[#3db4f2]/60 group-hover:shadow-lg group-hover:shadow-[#3db4f2]/20 group-hover:scale-105">
           <Image
             src="/logo.png"
@@ -108,7 +107,7 @@ export default async function HomePage({ searchParams }: PageProps) {
           />
         </div>
 
-        {/* Tiêu đề & phụ đề */}
+        {/* Title & Subtitle */}
         <div className="flex flex-col">
           <h1 className="text-xl font-extrabold tracking-tight text-white transition-colors duration-200 group-hover:text-[#3db4f2]">
             UmaIndex
@@ -122,7 +121,7 @@ export default async function HomePage({ searchParams }: PageProps) {
       {/* Filter Bar */}
       <FilterBar tags={allTags} artists={artists} translators={translators} />
 
-      {/* Grid Manga: 3 đến 4 cột giúp tranh to rõ */}
+      {/* Grid */}
       {posts.length === 0 ? (
         <div className="text-center py-20 bg-[#151f2e] rounded-xl border border-[#1e2d42]">
           <p className="text-lg text-[#8ba0b2]">No translated manga found.</p>
@@ -148,7 +147,7 @@ export default async function HomePage({ searchParams }: PageProps) {
         </div>
       )}
 
-      {/* Phân trang */}
+      {/* Pagination */}
       <Pagination currentPage={currentPage} totalPages={totalPages} />
     </main>
   );

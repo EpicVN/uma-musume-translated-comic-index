@@ -26,12 +26,12 @@ export default function IndexForm() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Có lỗi xảy ra');
+      if (!res.ok) throw new Error(data.error || 'An error occurred while processing the request.');
 
       form.reset();
       window.location.reload();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Có lỗi xảy ra');
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -88,10 +88,10 @@ export default function IndexForm() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
-                <span>Đang xử lý...</span>
+                <span>Processing...</span>
               </>
             ) : (
-              'Lưu & Liên kết'
+              'Save & Link'
             )}
           </button>
         </div>

@@ -38,10 +38,10 @@ export default function TweetGridCard({
 }: TweetGridCardProps) {
   const [isOpenModal, setIsOpenModal] = useState(false);
 
-  // Lấy dữ liệu bài tweet dịch để bóc tách trực tiếp ảnh đầu tiên
+  // Fetch the translated tweet data using the transId
   const { data: tweet, isLoading } = useTweet(transId);
 
-  // Khóa cuộn trang nền và lắng nghe phím ESC khi modal mở
+  // Handle Escape key to close modal and prevent background scrolling when modal is open
   useEffect(() => {
     if (!isOpenModal) return;
 
@@ -69,7 +69,7 @@ export default function TweetGridCard({
       })
     : null;
 
-  // Lấy URL ảnh manga đầu tiên
+  // Get the first photo URL from the tweet's mediaDetails if available
   const firstPhotoUrl =
     tweet?.mediaDetails && tweet.mediaDetails.length > 0
       ? tweet.mediaDetails[0].media_url_https
@@ -77,7 +77,7 @@ export default function TweetGridCard({
 
   return (
     <>
-      {/* 1. Card Manga Ngoài Grid */}
+      {/* 1. Manga Preview Card */}
       <div className="flex flex-col h-130 bg-[#151f2e] rounded-xl overflow-hidden border border-[#1e2d42] hover:border-[#3db4f2]/70 transition-all duration-200 shadow-md hover:shadow-lg hover:shadow-[#3db4f2]/10 p-3">
         {/* Header Tag & Date */}
         <div className="flex items-center justify-between gap-1 text-[10px] pb-2 border-b border-[#1e2d42]/60 shrink-0">
@@ -104,7 +104,7 @@ export default function TweetGridCard({
           )}
         </div>
 
-        {/* Khung tranh Manga ngoài Grid */}
+        {/* Manga Preview */}
         <div
           className="relative flex-1 w-full my-2 overflow-hidden rounded-lg bg-[#0b1622] cursor-pointer group flex items-center justify-center border border-[#1e2d42]/40"
           onClick={() => setIsOpenModal(true)}
@@ -129,14 +129,14 @@ export default function TweetGridCard({
             </div>
           )}
 
-          {/* Badge báo số trang */}
+          {/* Page Badge */}
           {tweet?.mediaDetails && tweet.mediaDetails.length > 1 && (
             <span className="absolute top-2 right-2 bg-black/75 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/10">
               1/{tweet.mediaDetails.length} P
             </span>
           )}
 
-          {/* Lớp phủ hover mở đọc nhanh */}
+          {/* Hover Overlay */}
           <div className="absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-[#0b1622] via-[#0b1622]/60 to-transparent flex items-end justify-center pb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <span className="text-[11px] font-semibold text-[#3db4f2] bg-[#0b1622]/90 px-3 py-1 rounded-full border border-[#3db4f2]/40 shadow-md">
               📖 Click to read
@@ -183,7 +183,7 @@ export default function TweetGridCard({
         </div>
       </div>
 
-      {/* 2. Modal Popup Đọc Truyện Đầy Đủ */}
+      {/* 2. Full Story Modal */}
       {isOpenModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-6"
@@ -193,7 +193,7 @@ export default function TweetGridCard({
             className="bg-[#151f2e] border border-[#1e2d42] rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header Cố Định */}
+            {/* Modal Header */}
             <div className="sticky top-0 z-20 flex items-center justify-between px-5 py-3.5 bg-[#151f2e]/95 backdrop-blur-md border-b border-[#22334a] shrink-0">
               <div className="flex flex-wrap items-center gap-2.5 min-w-0 pr-2">
                 <span className="text-white font-bold text-sm sm:text-base tracking-wide shrink-0">
@@ -223,7 +223,7 @@ export default function TweetGridCard({
               </button>
             </div>
 
-            {/* Khung cuộn hiển thị song song Raw & Translated */}
+            {/* Manga Preview */}
             <div className="overflow-y-auto p-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                 {/* Raw Tweet */}

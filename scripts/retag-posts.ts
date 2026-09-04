@@ -6,10 +6,10 @@ const prisma = new PrismaClient();
 
 async function retagAllPosts() {
   console.log("=======================================================");
-  console.log("🏷️ Bắt đầu quét và cập nhật lại Tag cho toàn bộ bài viết");
+  console.log("🏷️ Starting re-scanning and tag update for all posts");
   console.log("=======================================================\n");
 
-  // Truy vấn từ TranslatedPost và include OriginalPost cùng Tags
+  // Query TranslatedPost records including OriginalPost and associated Tags
   const translatedPosts = await prisma.translatedPost.findMany({
     include: {
       originalPost: {
@@ -24,7 +24,9 @@ async function retagAllPosts() {
     },
   });
 
-  console.log(`🔍 Tìm thấy tổng cộng: ${translatedPosts.length} bài dịch cần kiểm tra.`);
+  console.log(
+    `🔍 Found total: ${translatedPosts.length} translated posts to check.`,
+  );
 
   let updatedCount = 0;
 
@@ -33,23 +35,27 @@ async function retagAllPosts() {
     const orig = trans.originalPost;
 
     if (!orig) {
-      console.log(`[${i + 1}/${translatedPosts.length}] Bỏ qua bài [${trans.tweetId}]: Không tìm thấy bài gốc.`);
+      console.log(
+        `[${i + 1}/${translatedPosts.length}] Skipped post [${trans.tweetId}]: Original post not found.`,
+      );
       continue;
     }
 
-    // Gộp text của cả bài dịch và bài gốc
+    // Merge content from both original and translated posts
     const combinedText = `${orig.content || ""} ${trans.content || ""}`.trim();
 
     if (!combinedText) {
-      console.log(`[${i + 1}/${translatedPosts.length}] Bài [${trans.tweetId}]: Không có nội dung text để quét tag.`);
+      console.log(
+        `[${i + 1}/${translatedPosts.length}] Post [${trans.tweetId}]: No text content available for tag detection.`,
+      );
       continue;
     }
 
     try {
-      // Nhận diện và gán tag vào OriginalPost
+      // Detect and assign tags to OriginalPost
       await autoTagPost(prisma, orig.id, combinedText);
 
-      // Lấy danh sách tag cập nhật để in log
+      // Fetch updated tags for logging
       const updatedOrig = await prisma.originalPost.findUnique({
         where: { id: orig.id },
         include: {
@@ -59,22 +65,30 @@ async function retagAllPosts() {
         },
       });
 
-      const tagNames = updatedOrig?.tags.map((t) => t.tag.name).join(", ") || "None";
-      console.log(`✅ [${i + 1}/${translatedPosts.length}] Tweet [${trans.tweetId}] ➔ Tags: [${tagNames}]`);
+      const tagNames =
+        updatedOrig?.tags.map((t) => t.tag.name).join(", ") || "None";
+      console.log(
+        `✅ [${i + 1}/${translatedPosts.length}] Tweet [${trans.tweetId}] ➔ Tags: [${tagNames}]`,
+      );
       updatedCount++;
     } catch (err) {
-      console.error(`❌ [${i + 1}/${translatedPosts.length}] Lỗi cập nhật tag tweet [${trans.tweetId}]:`, err);
+      console.error(
+        `❌ [${i + 1}/${translatedPosts.length}] Error updating tags for tweet [${trans.tweetId}]:`,
+        err,
+      );
     }
   }
 
   console.log("\n=======================================================");
-  console.log(`🎉 Hoàn tất cập nhật tag cho ${updatedCount}/${translatedPosts.length} bài!`);
+  console.log(
+    `🎉 Successfully updated tags for ${updatedCount}/${translatedPosts.length} posts!`,
+  );
   console.log("=======================================================");
 }
 
 retagAllPosts()
   .catch((e) => {
-    console.error("Lỗi thực thi:", e);
+    console.error("Execution error:", e);
     process.exit(1);
   })
   .finally(async () => {
