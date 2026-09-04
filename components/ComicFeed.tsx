@@ -92,7 +92,7 @@ const getCachedPosts = (filter: FilterQuery) => {
 export default async function ComicFeed({
   searchParams,
 }: {
-  searchParams: Promise<{
+  searchParams?: Promise<{
     page?: string;
     q?: string;
     tag?: string;
@@ -101,7 +101,8 @@ export default async function ComicFeed({
     sort?: string;
   }>;
 }) {
-  const params = await searchParams;
+  // Tránh crash khi Next.js prerender trang ở build time
+  const params = (await searchParams) || {};
   const currentPage = Number(params.page) || 1;
   const searchQuery = params.q || "";
   const tagSlug = params.tag || "";

@@ -10,9 +10,6 @@ const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-// Cache toàn trang trong 60 giây ở cấp độ route
-export const revalidate = 60;
-
 const getFilterOptions = unstable_cache(
   async () => {
     const [allTags, artists, translators] = await Promise.all([
@@ -33,7 +30,7 @@ const getFilterOptions = unstable_cache(
 );
 
 interface PageProps {
-  searchParams: Promise<{
+  searchParams?: Promise<{
     page?: string;
     q?: string;
     tag?: string;
@@ -77,7 +74,7 @@ export default async function HomePage({ searchParams }: PageProps) {
       {/* Filter Bar */}
       <FilterBar tags={allTags} artists={artists} translators={translators} />
 
-      {/* Comic Feed bọc trong Suspense để không làm mất trạng thái Static/Edge Cache của trang */}
+      {/* Comic Feed bên trong Suspense */}
       <Suspense
         fallback={
           <div className="flex justify-center items-center py-24">
