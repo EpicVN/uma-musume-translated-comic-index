@@ -10,6 +10,8 @@ const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
+export const dynamic = "force-dynamic";
+
 const getFilterOptions = unstable_cache(
   async () => {
     const [allTags, artists, translators] = await Promise.all([
@@ -30,18 +32,12 @@ const getFilterOptions = unstable_cache(
 );
 
 interface PageProps {
-  searchParams?: Promise<{
-    page?: string;
-    q?: string;
-    tag?: string;
-    artist?: string;
-    translator?: string;
-    sort?: string;
-  }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default async function HomePage({ searchParams }: PageProps) {
+export default async function HomePage(props: PageProps) {
   const { allTags, artists, translators } = await getFilterOptions();
+  const searchParams = await props.searchParams;
 
   return (
     <main className="min-h-screen bg-[#0b1622] text-[#bcbedc] px-4 sm:px-8 md:px-12 py-8">
@@ -74,7 +70,7 @@ export default async function HomePage({ searchParams }: PageProps) {
       {/* Filter Bar */}
       <FilterBar tags={allTags} artists={artists} translators={translators} />
 
-      {/* Comic Feed bên trong Suspense */}
+      {/* Comic Feed */}
       <Suspense
         fallback={
           <div className="flex justify-center items-center py-24">
@@ -82,7 +78,32 @@ export default async function HomePage({ searchParams }: PageProps) {
           </div>
         }
       >
-        <ComicFeed searchParams={searchParams} />
+        <ComicFeed
+          page={
+            typeof searchParams?.page === "string"
+              ? searchParams.page
+              : undefined
+          }
+          q={typeof searchParams?.q === "string" ? searchParams.q : undefined}
+          tag={
+            typeof searchParams?.tag === "string" ? searchParams.tag : undefined
+          }
+          artist={
+            typeof searchParams?.artist === "string"
+              ? searchParams.artist
+              : undefined
+          }
+          translator={
+            typeof searchParams?.translator === "string"
+              ? searchParams.translator
+              : undefined
+          }
+          sort={
+            typeof searchParams?.sort === "string"
+              ? searchParams.sort
+              : undefined
+          }
+        />
       </Suspense>
     </main>
   );

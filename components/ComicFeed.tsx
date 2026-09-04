@@ -89,26 +89,29 @@ const getCachedPosts = (filter: FilterQuery) => {
   )();
 };
 
+interface ComicFeedProps {
+  page?: string;
+  q?: string;
+  tag?: string;
+  artist?: string;
+  translator?: string;
+  sort?: string;
+}
+
 export default async function ComicFeed({
-  searchParams,
-}: {
-  searchParams?: Promise<{
-    page?: string;
-    q?: string;
-    tag?: string;
-    artist?: string;
-    translator?: string;
-    sort?: string;
-  }>;
-}) {
-  // Tránh crash khi Next.js prerender trang ở build time
-  const params = (await searchParams) || {};
-  const currentPage = Number(params.page) || 1;
-  const searchQuery = params.q || "";
-  const tagSlug = params.tag || "";
-  const artistHandle = params.artist || "";
-  const translatorHandle = params.translator || "";
-  const sort = params.sort || "newest";
+  page,
+  q,
+  tag,
+  artist,
+  translator,
+  sort,
+}: ComicFeedProps) {
+  const currentPage = Number(page) || 1;
+  const searchQuery = q || "";
+  const tagSlug = tag || "";
+  const artistHandle = artist || "";
+  const translatorHandle = translator || "";
+  const sortOption = sort || "newest";
 
   const { totalCount, posts } = await getCachedPosts({
     page: currentPage,
@@ -116,7 +119,7 @@ export default async function ComicFeed({
     tag: tagSlug,
     artist: artistHandle,
     translator: translatorHandle,
-    sort,
+    sort: sortOption,
   });
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
