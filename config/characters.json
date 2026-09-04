@@ -5,7 +5,8 @@
         "jp": "スペシャルウィーク",
         "aliases": [
             "spe",
-            "spe-chan"
+            "spe-chan",
+            "スペちゃん"
         ]
     },
     {
@@ -13,7 +14,10 @@
         "name": "Silence Suzuka",
         "jp": "サイレンススズカ",
         "aliases": [
-            "suzuka"
+            "suzuka",
+            "suzu",
+            "suzuka-san",
+            "スズカ"
         ]
     },
     {
@@ -21,18 +25,31 @@
         "name": "Tokai Teio",
         "jp": "トウカイテイオー",
         "aliases": [
-            "teio"
+            "teio",
+            "teio-chan",
+            "テイオー"
         ]
     },
     {
         "slug": "maruzensky",
         "name": "Maruzensky",
-        "jp": "マルゼンスキー"
+        "jp": "マルゼンスキー",
+        "aliases": [
+            "maru",
+            "maru-oba",
+            "maruzensky",
+            "マルおば"
+        ]
     },
     {
         "slug": "fuji-kiseki",
         "name": "Fuji Kiseki",
-        "jp": "フジキセキ"
+        "jp": "フジキセキ",
+        "aliases": [
+            "fuji",
+            "fuji-san",
+            "フジさん"
+        ]
     },
     {
         "slug": "oguri-cap",
@@ -40,7 +57,9 @@
         "jp": "オグリキャップ",
         "aliases": [
             "oguri",
-            "ogurin"
+            "ogurin",
+            "oguri fat",
+            "オグリ"
         ]
     },
     {
@@ -49,33 +68,47 @@
         "jp": "ゴールドシップ",
         "aliases": [
             "golshi",
-            "golshee"
+            "golshee",
+            "goldshi",
+            "ゴルシ"
         ]
     },
     {
         "slug": "vodka",
         "name": "Vodka",
-        "jp": "ウオッカ"
+        "jp": "ウオッカ",
+        "aliases": [
+            "vodka",
+            "ウオッカ"
+        ]
     },
     {
         "slug": "daiwa-scarlet",
         "name": "Daiwa Scarlet",
         "jp": "ダイワスカーレット",
         "aliases": [
-            "dasca"
+            "dasca",
+            "scarlet",
+            "daiwa",
+            "ダスカ"
         ]
     },
     {
         "slug": "taiki-shuttle",
         "name": "Taiki Shuttle",
-        "jp": "タイキシャトル"
+        "jp": "タイキシャトル",
+        "aliases": [
+            "taiki",
+            "タイキ"
+        ]
     },
     {
         "slug": "grass-wonder",
         "name": "Grass Wonder",
         "jp": "グラスワンダー",
         "aliases": [
-            "grass"
+            "grass",
+            "グラス"
         ]
     },
     {
@@ -83,7 +116,10 @@
         "name": "Hishi Amazon",
         "jp": "ヒシアマゾン",
         "aliases": [
-            "hishima"
+            "hishima",
+            "hishi ama",
+            "hishiama",
+            "ヒシアマ"
         ]
     },
     {
@@ -91,7 +127,11 @@
         "name": "Mejiro McQueen",
         "jp": "メジロマックイーン",
         "aliases": [
-            "mcqueen"
+            "mcqueen",
+            "macc",
+            "big mack",
+            "マックイーン",
+            "マック"
         ]
     },
     {
@@ -99,7 +139,11 @@
         "name": "El Condor Pasa",
         "jp": "エルコンドルパサー",
         "aliases": [
-            "el"
+            "el",
+            "elcon",
+            "el con",
+            "エル",
+            "エルコン"
         ]
     },
     {
@@ -108,7 +152,9 @@
         "jp": "テイエムオペラオー",
         "aliases": [
             "opera o",
-            "opera"
+            "opera",
+            "tm opera o",
+            "オペラオー"
         ]
     },
     {
@@ -116,7 +162,10 @@
         "name": "Narita Brian",
         "jp": "ナリタブライアン",
         "aliases": [
-            "brian"
+            "brian",
+            "naribura",
+            "naribu",
+            "ナリブ"
         ]
     },
     {
@@ -125,20 +174,37 @@
         "jp": "シンボリルドルフ",
         "aliases": [
             "rudolf",
-            "kaicho"
+            "kaicho",
+            "luna",
+            "luna-chan",
+            "emperor",
+            "会長",
+            "ルドルフ",
+            "ルナちゃん"
         ]
     },
     {
         "slug": "air-groove",
         "name": "Air Groove",
-        "jp": "エアグルーヴ"
+        "jp": "エアグルーヴ",
+        "aliases": [
+            "air groove",
+            "airgroove",
+            "empress",
+            "tawaken",
+            "たわけ"
+        ]
     },
     {
         "slug": "seiun-sky",
         "name": "Seiun Sky",
         "jp": "セイウンスカイ",
         "aliases": [
-            "unsu"
+            "unsu",
+            "seichan",
+            "sei-chan",
+            "ウンス",
+            "セイちゃん"
         ]
     },
     {
@@ -146,7 +212,11 @@
         "name": "Tamamo Cross",
         "jp": "タマモクロス",
         "aliases": [
-            "tamamo"
+            "tamamo",
+            "tama",
+            "tama-chan",
+            "タマ",
+            "タマちゃん"
         ]
     },
     {
@@ -154,20 +224,32 @@
         "name": "Fine Motion",
         "jp": "ファインモーション",
         "aliases": [
-            "fine"
+            "fine",
+            "denka",
+            "princess",
+            "殿下"
         ]
     },
     {
         "slug": "biwa-hayahide",
         "name": "Biwa Hayahide",
-        "jp": "ビワハヤヒデ"
+        "jp": "ビワハヤヒデ",
+        "aliases": [
+            "hayahide",
+            "biwahaya",
+            "bighead",
+            "ビワハヤヒデ"
+        ]
     },
     {
         "slug": "mayano-top-gun",
         "name": "Mayano Top Gun",
         "jp": "マヤノトップガン",
         "aliases": [
-            "mayano"
+            "mayano",
+            "maya",
+            "mayachin",
+            "マヤちん"
         ]
     },
     {
@@ -175,7 +257,9 @@
         "name": "Manhattan Cafe",
         "jp": "マンハッタンカフェ",
         "aliases": [
-            "cafe"
+            "cafe",
+            "cafe-chan",
+            "カフェ"
         ]
     },
     {
@@ -183,46 +267,69 @@
         "name": "Mihono Bourbon",
         "jp": "ミホノブルボン",
         "aliases": [
-            "bourbon"
+            "bourbon",
+            "cyborg",
+            "ブルボン"
         ]
     },
     {
         "slug": "mejiro-ryan",
         "name": "Mejiro Ryan",
-        "jp": "メジロライアン"
+        "jp": "メジロライアン",
+        "aliases": [
+            "ryan",
+            "mejiro ryan",
+            "ライアン"
+        ]
     },
     {
         "slug": "hishi-akebono",
         "name": "Hishi Akebono",
         "jp": "ヒシアケボノ",
         "aliases": [
-            "bono"
+            "bono",
+            "akebono",
+            "ヒシアケボノ"
         ]
     },
     {
         "slug": "yukino-bijin",
         "name": "Yukino Bijin",
-        "jp": "ユキノビジン"
+        "jp": "ユキノビジン",
+        "aliases": [
+            "yukino",
+            "yukino bijin",
+            "ユキノ"
+        ]
     },
     {
         "slug": "rice-shower",
         "name": "Rice Shower",
         "jp": "ライスシャワー",
         "aliases": [
-            "rice"
+            "rice",
+            "rice-chan",
+            "black assassin",
+            "ライス"
         ]
     },
     {
         "slug": "ines-fujin",
         "name": "Ines Fujin",
-        "jp": "アイネスフウジン"
+        "jp": "アイネスフウジン",
+        "aliases": [
+            "ines",
+            "inesu",
+            "イナス"
+        ]
     },
     {
         "slug": "agnes-tachyon",
         "name": "Agnes Tachyon",
         "jp": "アグネスタキオン",
         "aliases": [
-            "tachyon"
+            "tachyon",
+            "タキオン"
         ]
     },
     {
@@ -230,20 +337,30 @@
         "name": "Admire Vega",
         "jp": "アドマイヤベガ",
         "aliases": [
-            "ayabe"
+            "ayabe",
+            "ayabe-san",
+            "adobe",
+            "アヤベさん"
         ]
     },
     {
         "slug": "inari-one",
         "name": "Inari One",
-        "jp": "イナリワン"
+        "jp": "イナリワン",
+        "aliases": [
+            "inari",
+            "inari one",
+            "イナリ"
+        ]
     },
     {
         "slug": "winning-ticket",
         "name": "Winning Ticket",
         "jp": "ウイニングチケット",
         "aliases": [
-            "chiket"
+            "chiket",
+            "chikezo",
+            "チケゾー"
         ]
     },
     {
@@ -251,7 +368,9 @@
         "name": "Air Shakur",
         "jp": "エアシャカール",
         "aliases": [
-            "shakur"
+            "shakur",
+            "shaka",
+            "釈迦さん"
         ]
     },
     {
@@ -259,7 +378,8 @@
         "name": "Eishin Flash",
         "jp": "エイシンフラッシュ",
         "aliases": [
-            "flash"
+            "flash",
+            "フラッシュ"
         ]
     },
     {
@@ -267,25 +387,41 @@
         "name": "Curren Chan",
         "jp": "カレンチャン",
         "aliases": [
-            "curren"
+            "curren",
+            "karen",
+            "karen-chan",
+            "カレンチャン"
         ]
     },
     {
         "slug": "kawakami-princess",
         "name": "Kawakami Princess",
-        "jp": "カワカミプリンセス"
+        "jp": "カワカミプリンセス",
+        "aliases": [
+            "kawakami",
+            "kawashima",
+            "カワカミ"
+        ]
     },
     {
         "slug": "gold-city",
         "name": "Gold City",
-        "jp": "ゴールドシチー"
+        "jp": "ゴールドシチー",
+        "aliases": [
+            "gold city",
+            "golcity",
+            "gorshichi",
+            "ゴルシチ"
+        ]
     },
     {
         "slug": "sakura-bakushin-o",
         "name": "Sakura Bakushin O",
         "jp": "サクラバクシンオー",
         "aliases": [
-            "bakushin"
+            "bakushin",
+            "baku-chan",
+            "バクシン"
         ]
     },
     {
@@ -293,7 +429,9 @@
         "name": "Seeking the Pearl",
         "jp": "シーキングザパール",
         "aliases": [
-            "pearl"
+            "pearl",
+            "seeking",
+            "パール"
         ]
     },
     {
@@ -301,7 +439,9 @@
         "name": "Shinko Windy",
         "jp": "シンコウウインディ",
         "aliases": [
-            "windy"
+            "windy",
+            "windy-chan",
+            "ウインディちゃん"
         ]
     },
     {
@@ -309,7 +449,9 @@
         "name": "Sweep Tosho",
         "jp": "スイープトウショウ",
         "aliases": [
-            "sweep"
+            "sweepy",
+            "sweep",
+            "スイーピー"
         ]
     },
     {
@@ -317,7 +459,11 @@
         "name": "Super Creek",
         "jp": "スーパークリーク",
         "aliases": [
-            "creek"
+            "creek",
+            "mama",
+            "super creek",
+            "クリーク",
+            "ママ"
         ]
     },
     {
@@ -325,7 +471,10 @@
         "name": "Smart Falcon",
         "jp": "スマートファルコン",
         "aliases": [
-            "falco"
+            "falco",
+            "smart falcon",
+            "スマファル",
+            "ファル子"
         ]
     },
     {
@@ -333,7 +482,9 @@
         "name": "Zenno Rob Roy",
         "jp": "ゼンノロブロイ",
         "aliases": [
-            "rob roy"
+            "rob roy",
+            "robroi",
+            "ロブロイ"
         ]
     },
     {
@@ -341,7 +492,8 @@
         "name": "Tosen Jordan",
         "jp": "トーセンジョーダン",
         "aliases": [
-            "jordan"
+            "jordan",
+            "ジョーダン"
         ]
     },
     {
@@ -349,7 +501,9 @@
         "name": "Nakayama Festa",
         "jp": "ナカヤマフェスタ",
         "aliases": [
-            "festa"
+            "festa",
+            "nakayama",
+            "ナカヤマ"
         ]
     },
     {
@@ -357,20 +511,28 @@
         "name": "Narita Taishin",
         "jp": "ナリタタイシン",
         "aliases": [
-            "taishin"
+            "taishin",
+            "タイシン"
         ]
     },
     {
         "slug": "nishino-flower",
         "name": "Nishino Flower",
-        "jp": "ニシノフラワー"
+        "jp": "ニシノフラワー",
+        "aliases": [
+            "flower",
+            "nishino",
+            "フラワー"
+        ]
     },
     {
         "slug": "haru-urara",
         "name": "Haru Urara",
         "jp": "ハルウララ",
         "aliases": [
-            "urara"
+            "urara",
+            "haru urara",
+            "ウララ"
         ]
     },
     {
@@ -378,20 +540,29 @@
         "name": "Bamboo Memory",
         "jp": "バンブーメモリー",
         "aliases": [
-            "bamboo"
+            "bamboo",
+            "バンブー"
         ]
     },
     {
         "slug": "biko-pegasus",
         "name": "Biko Pegasus",
-        "jp": "ビコーペガサス"
+        "jp": "ビコーペガサス",
+        "aliases": [
+            "biko",
+            "bikope",
+            "ビコペ"
+        ]
     },
     {
         "slug": "marvelous-sunday",
         "name": "Marvelous Sunday",
         "jp": "マーベラスサンデー",
         "aliases": [
-            "marvelous"
+            "marvelous",
+            "mabe",
+            "mabesun",
+            "マーベラス"
         ]
     },
     {
@@ -400,7 +571,9 @@
         "jp": "マチカネフクキタル",
         "aliases": [
             "fukukitaru",
-            "fuku"
+            "fuku",
+            "matafaka",
+            "フクキタル"
         ]
     },
     {
@@ -408,7 +581,11 @@
         "name": "Meisho Doto",
         "jp": "メイショウドトウ",
         "aliases": [
-            "doto"
+            "doto",
+            "dot-san",
+            "dotto",
+            "ドトウ",
+            "ドットさん"
         ]
     },
     {
@@ -416,7 +593,10 @@
         "name": "Mejiro Dober",
         "jp": "メジロドーベル",
         "aliases": [
-            "dober"
+            "dober",
+            "dobel",
+            "dobu",
+            "ドーベル"
         ]
     },
     {
@@ -424,7 +604,10 @@
         "name": "Nice Nature",
         "jp": "ナイスネイチャ",
         "aliases": [
-            "nature"
+            "nature",
+            "nice nature",
+            "evil nature",
+            "ネイチャ"
         ]
     },
     {
@@ -432,7 +615,9 @@
         "name": "King Halo",
         "jp": "キングヘイロー",
         "aliases": [
-            "king"
+            "king",
+            "kingu",
+            "キング"
         ]
     },
     {
@@ -441,7 +626,9 @@
         "jp": "マチカネタンホイザ",
         "aliases": [
             "machitan",
-            "tannhauser"
+            "tannhauser",
+            "mambo",
+            "マチタン"
         ]
     },
     {
@@ -449,7 +636,8 @@
         "name": "Ikuno Dictus",
         "jp": "イクノディクタス",
         "aliases": [
-            "ikuno"
+            "ikuno",
+            "イクノ"
         ]
     },
     {
@@ -457,7 +645,8 @@
         "name": "Mejiro Palmer",
         "jp": "メジロパーマー",
         "aliases": [
-            "palmer"
+            "palmer",
+            "パーマー"
         ]
     },
     {
@@ -465,7 +654,10 @@
         "name": "Daitaku Helios",
         "jp": "ダイタクヘリオス",
         "aliases": [
-            "helios"
+            "helios",
+            "taiyojin",
+            "sun goddess",
+            "太陽神"
         ]
     },
     {
@@ -473,7 +665,11 @@
         "name": "Twin Turbo",
         "jp": "ツインターボ",
         "aliases": [
-            "turbo"
+            "turbo",
+            "turbo-shisho",
+            "double jet",
+            "ターボ",
+            "ターボ師匠"
         ]
     },
     {
@@ -482,7 +678,10 @@
         "jp": "サトノダイヤモンド",
         "aliases": [
             "dia",
-            "dia-chan"
+            "dia-chan",
+            "diamond",
+            "john sega",
+            "ダイヤちゃん"
         ]
     },
     {
@@ -491,7 +690,9 @@
         "jp": "キタサンブラック",
         "aliases": [
             "kitasan",
-            "kita-chan"
+            "kita-chan",
+            "kita",
+            "キタちゃん"
         ]
     },
     {
@@ -499,7 +700,9 @@
         "name": "Sakura Chiyono O",
         "jp": "サクラチヨノオー",
         "aliases": [
-            "chiyo"
+            "chiyo",
+            "chiyo-chan",
+            "チヨちゃん"
         ]
     },
     {
@@ -507,7 +710,8 @@
         "name": "Sirius Symboli",
         "jp": "シリウスシンボリ",
         "aliases": [
-            "sirius"
+            "sirius",
+            "シリウス"
         ]
     },
     {
@@ -515,25 +719,39 @@
         "name": "Mejiro Ardan",
         "jp": "メジロアルダン",
         "aliases": [
-            "ardan"
+            "ardan",
+            "mejiro ardan",
+            "アルダン"
         ]
     },
     {
         "slug": "yaeno-muteki",
         "name": "Yaeno Muteki",
-        "jp": "ヤエノムテキ"
+        "jp": "ヤエノムテキ",
+        "aliases": [
+            "yaeno",
+            "yae-chan",
+            "ヤエノ"
+        ]
     },
     {
         "slug": "tsurumaru-tsuyoshi",
         "name": "Tsurumaru Tsuyoshi",
-        "jp": "ツルマルツヨシ"
+        "jp": "ツルマルツヨシ",
+        "aliases": [
+            "tsuyoshi",
+            "tsuru",
+            "ツルマル"
+        ]
     },
     {
         "slug": "mejiro-bright",
         "name": "Mejiro Bright",
         "jp": "メジロブライト",
         "aliases": [
-            "bright"
+            "bright",
+            "mejiro bright",
+            "ブライト"
         ]
     },
     {
@@ -541,7 +759,9 @@
         "name": "Sakura Laurel",
         "jp": "サクラローレル",
         "aliases": [
-            "laurel"
+            "laurel",
+            "sakura laurel",
+            "ローレル"
         ]
     },
     {
@@ -550,7 +770,9 @@
         "jp": "ナリタトップロード",
         "aliases": [
             "ntr",
-            "top road"
+            "top road",
+            "topro",
+            "トプロ"
         ]
     },
     {
@@ -558,7 +780,9 @@
         "name": "Yamanin Zephyr",
         "jp": "ヤマニンゼファー",
         "aliases": [
-            "zephyr"
+            "zephyr",
+            "yamanin",
+            "ゼファー"
         ]
     },
     {
@@ -566,7 +790,9 @@
         "name": "Jungle Pocket",
         "jp": "ジャングルポケット",
         "aliases": [
-            "pokke"
+            "pokke",
+            "jungle pocket",
+            "ポッケ"
         ]
     },
     {
@@ -574,20 +800,29 @@
         "name": "Dantsu Flame",
         "jp": "ダンツフレーム",
         "aliases": [
-            "dantsu"
+            "dantsu",
+            "dantsu flame",
+            "ダンツ"
         ]
     },
     {
         "slug": "durandal",
         "name": "Durandal",
-        "jp": "デュランダル"
+        "jp": "デュランダル",
+        "aliases": [
+            "dura",
+            "durandal",
+            "デュランダル"
+        ]
     },
     {
         "slug": "aston-machan",
         "name": "Aston Machan",
         "jp": "アストンマーチャン",
         "aliases": [
-            "machan"
+            "machan",
+            "aston",
+            "マーチャン"
         ]
     },
     {
@@ -595,7 +830,9 @@
         "name": "Satono Crown",
         "jp": "サトノクラウン",
         "aliases": [
-            "crown"
+            "crown",
+            "satono crown",
+            "クラウン"
         ]
     },
     {
@@ -603,30 +840,50 @@
         "name": "Cheval Grand",
         "jp": "シュヴァルグラン",
         "aliases": [
-            "cheval"
+            "cheval",
+            "cheval-chan",
+            "シュヴァル"
         ]
     },
     {
         "slug": "verxina",
         "name": "Verxina",
-        "jp": "ヴィルシーナ"
+        "jp": "ヴィルシーナ",
+        "aliases": [
+            "verxina",
+            "ヴィルシーナ",
+            "ville"
+        ]
     },
     {
         "slug": "vivlos",
         "name": "Vivlos",
-        "jp": "ヴィブロス"
+        "jp": "ヴィブロス",
+        "aliases": [
+            "vivlos",
+            "ヴィブロス",
+            "vibros"
+        ]
     },
     {
         "slug": "duramente",
         "name": "Duramente",
-        "jp": "ドゥラメンテ"
+        "jp": "ドゥラメンテ",
+        "aliases": [
+            "dura",
+            "duramente",
+            "ドゥラ"
+        ]
     },
     {
         "slug": "orfevre",
         "name": "Orfevre",
         "jp": "オルフェーヴル",
         "aliases": [
-            "orfe"
+            "orfe",
+            "oru",
+            "orfer",
+            "オルフェ"
         ]
     },
     {
@@ -634,68 +891,120 @@
         "name": "Gentildonna",
         "jp": "ジェンティルドンナ",
         "aliases": [
-            "gentil"
+            "gentil",
+            "gentil donna",
+            "don",
+            "ジェンティル"
         ]
     },
     {
         "slug": "almond-eye",
         "name": "Almond Eye",
-        "jp": "アーモンドアイ"
+        "jp": "アーモンドアイ",
+        "aliases": [
+            "almond",
+            "almond eye",
+            "アーモンド"
+        ]
     },
     {
         "slug": "buena-vista",
         "name": "Buena Vista",
-        "jp": "ブエナビスタ"
+        "jp": "ブエナビスタ",
+        "aliases": [
+            "buena",
+            "buena vista",
+            "ブエナ"
+        ]
     },
     {
         "slug": "dream-journey",
         "name": "Dream Journey",
         "jp": "ドリームジャーニー",
         "aliases": [
-            "doraji"
+            "doraji",
+            "dream journey",
+            "ドリジャ"
         ]
     },
     {
         "slug": "calstone-light-o",
         "name": "Calstone Light O",
-        "jp": "カルストンライトオ"
+        "jp": "カルストンライトオ",
+        "aliases": [
+            "calstone",
+            "light o",
+            "カルストン"
+        ]
     },
     {
         "slug": "cesario",
         "name": "Cesario",
-        "jp": "シーザリオ"
+        "jp": "シーザリオ",
+        "aliases": [
+            "cesario",
+            "cesa",
+            "シーザリオ"
+        ]
     },
     {
         "slug": "daring-tact",
         "name": "Daring Tact",
-        "jp": "デアリングタクト"
+        "jp": "デアリングタクト",
+        "aliases": [
+            "daring tact",
+            "daring",
+            "デアタク"
+        ]
     },
     {
         "slug": "still-in-love",
         "name": "Still in Love",
-        "jp": "スティルインラブ"
+        "jp": "スティルインラブ",
+        "aliases": [
+            "still",
+            "still in love",
+            "スティル"
+        ]
     },
     {
         "slug": "rhein-kraft",
         "name": "Rhein Kraft",
-        "jp": "ラインクラフト"
+        "jp": "ラインクラフト",
+        "aliases": [
+            "rhein",
+            "rhein kraft",
+            "ライン"
+        ]
     },
     {
         "slug": "daring-heart",
         "name": "Daring Heart",
-        "jp": "デアリングハート"
+        "jp": "デアリングハート",
+        "aliases": [
+            "daring heart",
+            "daring",
+            "デアリングハート"
+        ]
     },
     {
         "slug": "air-messiah",
         "name": "Air Messiah",
-        "jp": "エアメサイア"
+        "jp": "エアメサイア",
+        "aliases": [
+            "messiah",
+            "air messiah",
+            "エアメサイア"
+        ]
     },
     {
         "slug": "copano-rickey",
         "name": "Copano Rickey",
         "jp": "コパノリッキー",
         "aliases": [
-            "rickey"
+            "rickey",
+            "copano",
+            "リッキー"
         ]
     },
     {
@@ -703,7 +1012,9 @@
         "name": "Hokko Tarumae",
         "jp": "ホッコータルマエ",
         "aliases": [
-            "tarumae"
+            "tarumae",
+            "hokko",
+            "タルマエ"
         ]
     },
     {
@@ -711,7 +1022,9 @@
         "name": "Wonder Acute",
         "jp": "ワンダーアキュート",
         "aliases": [
-            "acute"
+            "acute",
+            "wonder acute",
+            "アキュート"
         ]
     },
     {
@@ -719,18 +1032,29 @@
         "name": "Espoir City",
         "jp": "エスポワールシチー",
         "aliases": [
-            "espoir"
+            "espoir",
+            "espoir city",
+            "エスポ"
         ]
     },
     {
         "slug": "transcend",
         "name": "Transcend",
-        "jp": "トランセンド"
+        "jp": "トランセンド",
+        "aliases": [
+            "transcend",
+            "trans",
+            "トラン"
+        ]
     },
     {
         "slug": "furioso",
         "name": "Furioso",
-        "jp": "フリオーソ"
+        "jp": "フリオーソ",
+        "aliases": [
+            "furioso",
+            "フリオーソ"
+        ]
     },
     {
         "slug": "symboli-kris-s",
@@ -738,7 +1062,9 @@
         "jp": "シンボリクリスエス",
         "aliases": [
             "kris s",
-            "botan"
+            "botan",
+            "kriss",
+            "クリスエス"
         ]
     },
     {
@@ -746,20 +1072,29 @@
         "name": "Tanino Gimlet",
         "jp": "タニノギムレット",
         "aliases": [
-            "gimlet"
+            "gimlet",
+            "tanino",
+            "ギムレット"
         ]
     },
     {
         "slug": "tap-dance-city",
         "name": "Tap Dance City",
-        "jp": "タップダンスシチー"
+        "jp": "タップダンスシチー",
+        "aliases": [
+            "tap dance",
+            "tap city",
+            "タップ"
+        ]
     },
     {
         "slug": "neo-universe",
         "name": "Neo Universe",
         "jp": "ネオユニヴァース",
         "aliases": [
-            "neo"
+            "neo",
+            "neo uni",
+            "ネオユニ"
         ]
     },
     {
@@ -767,20 +1102,29 @@
         "name": "Hishi Miracle",
         "jp": "ヒシミラクル",
         "aliases": [
-            "miracle"
+            "miracle",
+            "hishi miracle",
+            "ミラクル"
         ]
     },
     {
         "slug": "ks-miracle",
         "name": "K.S.Miracle",
-        "jp": "ケイエスミラクル"
+        "jp": "ケイエスミラクル",
+        "aliases": [
+            "ks miracle",
+            "miracle",
+            "ケイエス"
+        ]
     },
     {
         "slug": "katsuragi-ace",
         "name": "Katsuragi Ace",
         "jp": "カツラギエース",
         "aliases": [
-            "ace"
+            "ace",
+            "katsuragi",
+            "カツラギ"
         ]
     },
     {
@@ -788,7 +1132,9 @@
         "name": "Mejiro Ramonu",
         "jp": "メジロラモーヌ",
         "aliases": [
-            "ramonu"
+            "ramonu",
+            "mejiro ramonu",
+            "ラモーヌ"
         ]
     },
     {
@@ -796,64 +1142,112 @@
         "name": "Sounds of Earth",
         "jp": "サウンズオブアース",
         "aliases": [
-            "earth"
+            "earth",
+            "sounds",
+            "サウンズ"
         ]
     },
     {
         "slug": "royce-and-royce",
         "name": "Royce and Royce",
-        "jp": "ロイスアンドロイス"
+        "jp": "ロイスアンドロイス",
+        "aliases": [
+            "royce",
+            "royce and royce",
+            "ロイス"
+        ]
     },
     {
         "slug": "no-reason",
         "name": "No Reason",
-        "jp": "ノーリーズン"
+        "jp": "ノーリーズン",
+        "aliases": [
+            "no reason",
+            "no re",
+            "ノーリーズン"
+        ]
     },
     {
         "slug": "samson-big",
         "name": "Samson Big",
-        "jp": "サムソンビッグ"
+        "jp": "サムソンビッグ",
+        "aliases": [
+            "samson",
+            "samson big",
+            "サムソン"
+        ]
     },
     {
         "slug": "north-flight",
         "name": "North Flight",
-        "jp": "ノースフライト"
+        "jp": "ノースフライト",
+        "aliases": [
+            "north",
+            "north flight",
+            "ノース"
+        ]
     },
     {
         "slug": "blast-onepiece",
         "name": "Blast Onepiece",
-        "jp": "ブラストワンピース"
+        "jp": "ブラストワンピース",
+        "aliases": [
+            "blast",
+            "blast onepiece",
+            "ブラスト"
+        ]
     },
     {
         "slug": "chrono-genesis",
         "name": "Chrono Genesis",
-        "jp": "クロノジェネシス"
+        "jp": "クロノジェネシス",
+        "aliases": [
+            "chrono",
+            "chrono genesis",
+            "クロノ"
+        ]
     },
     {
         "slug": "gran-alegria",
         "name": "Gran Alegria",
-        "jp": "グランアレグリア"
+        "jp": "グランアレグリア",
+        "aliases": [
+            "gran",
+            "gran alegria",
+            "グラン"
+        ]
     },
     {
         "slug": "loves-only-you",
         "name": "Loves Only You",
-        "jp": "ラヴズオンリーユー"
+        "jp": "ラヴズオンリーユー",
+        "aliases": [
+            "loves",
+            "loves only you",
+            "ラヴズ"
+        ]
     },
     {
         "slug": "lucky-lilac",
         "name": "Lucky Lilac",
-        "jp": "ラッキーライラック"
+        "jp": "ラッキーライラック",
+        "aliases": [
+            "lucky",
+            "lucky lilac",
+            "ライラック"
+        ]
     },
     {
         "slug": "stay-gold",
         "name": "Stay Gold",
         "jp": "ステイゴールド",
         "aliases": [
-            "ste-go"
+            "ste-go",
+            "stego",
+            "stay gold",
+            "ステイゴールド"
         ]
     },
-    
-
     {
         "slug": "hayakawa-tazuna",
         "name": "Hayakawa Tazuna",
@@ -952,6 +1346,460 @@
             "otohashi",
             "reporter",
             "乙名史"
+        ]
+    },
+    {
+        "slug": "agnes-digital",
+        "name": "Agnes Digital",
+        "jp": "アグネスデジタル",
+        "aliases": [
+            "digital",
+            "digitan",
+            "デジたん"
+        ]
+    },
+    {
+        "slug": "mr-cb",
+        "name": "Mr. C.B.",
+        "jp": "ミスターシービー",
+        "aliases": [
+            "mr cb",
+            "cb",
+            "c.b.",
+            "シービー"
+        ]
+    },
+    {
+        "slug": "daiichi-ruby",
+        "name": "Daiichi Ruby",
+        "jp": "ダイイチルビー",
+        "aliases": [
+            "ruby",
+            "daiichi",
+            "ルビー"
+        ]
+    },
+    {
+        "slug": "believe",
+        "name": "Believe",
+        "jp": "ビリーヴ",
+        "aliases": [
+            "believe",
+            "ビリーヴ"
+        ]
+    },
+    {
+        "slug": "fusaichi-pandora",
+        "name": "Fusaichi Pandora",
+        "jp": "フサイチパンドラ",
+        "aliases": [
+            "pandora",
+            "fusaichi",
+            "パンドラ"
+        ]
+    },
+    {
+        "slug": "win-variation",
+        "name": "Win Variation",
+        "jp": "ウインバリアシオン",
+        "aliases": [
+            "win variation",
+            "shion",
+            "shion-chan",
+            "bari",
+            "bariyan",
+            "シオン",
+            "バリやん"
+        ]
+    },
+    {
+        "slug": "admire-groove",
+        "name": "Admire Groove",
+        "jp": "アドマイヤグルーヴ",
+        "aliases": [
+            "adgroove",
+            "admire groove",
+            "groove",
+            "アドグル"
+        ]
+    },
+    {
+        "slug": "genuine",
+        "name": "Genuine",
+        "jp": "ジェニュイン",
+        "aliases": [
+            "genuine",
+            "ジェニュイン"
+        ]
+    },
+    {
+        "slug": "bubble-gum-fellow",
+        "name": "Bubble Gum Fellow",
+        "jp": "バブルガムフェロー",
+        "aliases": [
+            "bubble gum",
+            "bubble",
+            "バブル"
+        ]
+    },
+    {
+        "slug": "sakura-chitose-o",
+        "name": "Sakura Chitose O",
+        "jp": "サクラチトセオー",
+        "aliases": [
+            "chitose",
+            "chitose o",
+            "チトセ"
+        ]
+    },
+    {
+        "slug": "fenomeno",
+        "name": "Fenomeno",
+        "jp": "フェノーメノ",
+        "aliases": [
+            "feno",
+            "fenomeno",
+            "フェノ"
+        ]
+    },
+    {
+        "slug": "curren-bouquetd-or",
+        "name": "Curren Bouquetd'or",
+        "jp": "カレンブーケドール",
+        "aliases": [
+            "bouquet d'or",
+            "bouquetdor",
+            "bouquet",
+            "ブーケ"
+        ]
+    },
+    {
+        "slug": "red-desire",
+        "name": "Red Desire",
+        "jp": "レッドディザイア",
+        "aliases": [
+            "red desire",
+            "red",
+            "レッド"
+        ]
+    },
+    {
+        "slug": "kiseki",
+        "name": "Kiseki",
+        "jp": "キセキ",
+        "aliases": [
+            "kiseki",
+            "キセキ"
+        ]
+    },
+    {
+        "slug": "forever-young",
+        "name": "Forever Young",
+        "jp": "フォーエバーヤング",
+        "aliases": [
+            "foreveryoung",
+            "f.y.",
+            "yanko",
+            "yankee",
+            "フォーエバーヤング"
+        ]
+    },
+    {
+        "slug": "marche-lorraine",
+        "name": "Marche Lorraine",
+        "jp": "マルシュロレーヌ",
+        "aliases": [
+            "marche",
+            "lorraine",
+            "マルシュ"
+        ]
+    },
+    {
+        "slug": "epiphaneia",
+        "name": "Epiphaneia",
+        "jp": "エピファネイア",
+        "aliases": [
+            "epiphaneia",
+            "epiph",
+            "エピファ"
+        ]
+    },
+    {
+        "slug": "logotype",
+        "name": "Logotype",
+        "jp": "ロゴタイプ",
+        "aliases": [
+            "logo",
+            "logotype",
+            "ロゴタイプ"
+        ]
+    },
+    {
+        "slug": "victoire-pisa",
+        "name": "Victoire Pisa",
+        "jp": "ヴィクトワールピサ",
+        "aliases": [
+            "victoire",
+            "pisa",
+            "ヴィクトワール"
+        ]
+    },
+    {
+        "slug": "rose-kingdom",
+        "name": "Rose Kingdom",
+        "jp": "ローズキングダム",
+        "aliases": [
+            "rose",
+            "rose kingdom",
+            "ローズ"
+        ]
+    },
+    {
+        "slug": "rulership",
+        "name": "Rulership",
+        "jp": "ルーラーシップ",
+        "aliases": [
+            "rulership",
+            "ルーラーシップ"
+        ]
+    },
+    {
+        "slug": "efforia",
+        "name": "Efforia",
+        "jp": "エフフォーリア",
+        "aliases": [
+            "f4",
+            "efforia",
+            "エフフォーリア"
+        ]
+    },
+    {
+        "slug": "titleholder",
+        "name": "Titleholder",
+        "jp": "タイトルホルダー",
+        "aliases": [
+            "titleholder",
+            "title",
+            "タイトルホルダー"
+        ]
+    },
+    {
+        "slug": "phalaenopsis",
+        "name": "Phalaenopsis",
+        "jp": "ファレノプシス",
+        "aliases": [
+            "phalaenopsis",
+            "phala",
+            "ファレノ"
+        ]
+    },
+    {
+        "slug": "happy-meek",
+        "name": "Happy Meek",
+        "jp": "ハッピーミーク",
+        "aliases": [
+            "happy meek",
+            "meek"
+        ]
+    },
+    {
+        "slug": "bitter-glasse",
+        "name": "Bitter Glasse",
+        "jp": "ビターグラッセ",
+        "aliases": [
+            "bitter glasse",
+            "glasse"
+        ]
+    },
+    {
+        "slug": "little-cocon",
+        "name": "Little Cocon",
+        "jp": "リトルココン",
+        "aliases": [
+            "little cocon",
+            "cocon"
+        ]
+    },
+    {
+        "slug": "venus-paques",
+        "name": "Venus Paques",
+        "jp": "ヴェニュスパーク",
+        "aliases": [
+            "venus paques"
+        ]
+    },
+    {
+        "slug": "rigantona",
+        "name": "Rigantona",
+        "jp": "リガントーナ",
+        "aliases": [
+            "rigantona"
+        ]
+    },
+    {
+        "slug": "sonon-elfie",
+        "name": "Sonon Elfie",
+        "jp": "ソノンエルフィー",
+        "aliases": [
+            "sonon",
+            "elfie"
+        ]
+    },
+    {
+        "slug": "otonashi-etsuko",
+        "name": "Otonashi Etsuko",
+        "jp": "乙名史悦子",
+        "aliases": [
+            "otona shi",
+            "otoha",
+            "reporter"
+        ]
+    },
+    {
+        "slug": "kiryuin-aoi",
+        "name": "Kiryuin Aoi",
+        "jp": "桐生院葵",
+        "aliases": [
+            "kiryuuin",
+            "aoi-san",
+            "桐生院"
+        ]
+    },
+    {
+        "slug": "anshinzawa-sasami",
+        "name": "Anshinzawa Sasami",
+        "jp": "安心沢刺々美",
+        "aliases": [
+            "anshinzawa",
+            "sasami",
+            "acupuncturist",
+            "安心沢"
+        ]
+    },
+    {
+        "slug": "darley-arabian",
+        "name": "Darley Arabian",
+        "jp": "ダーレーアラビアン",
+        "aliases": [
+            "darley"
+        ]
+    },
+    {
+        "slug": "godolphin-barb",
+        "name": "Godolphin Barb",
+        "jp": "ゴドルフィンバルブ",
+        "aliases": [
+            "godolphin"
+        ]
+    },
+    {
+        "slug": "byerley-turk",
+        "name": "Byerley Turk",
+        "jp": "バイアリーターク",
+        "aliases": [
+            "byerley"
+        ]
+    },
+    {
+        "slug": "satake-mei",
+        "name": "Satake Mei",
+        "jp": "佐岳メイ",
+        "aliases": [
+            "satake mei",
+            "mei"
+        ]
+    },
+    {
+        "slug": "tsurugi-ryoka",
+        "name": "Tsurugi Ryoka",
+        "jp": "都留岐涼花",
+        "aliases": [
+            "tsurugi",
+            "tsurugi ryoka",
+            "都留岐"
+        ]
+    },
+    {
+        "slug": "sugar-lights",
+        "name": "Sugar Lights",
+        "jp": "シュガーライツ",
+        "aliases": [
+            "sugar lights"
+        ]
+    },
+    {
+        "slug": "saint-lite",
+        "name": "Saint Lite",
+        "jp": "セントライト",
+        "aliases": [
+            "saint lite"
+        ]
+    },
+    {
+        "slug": "speed-symboli",
+        "name": "Speed Symboli",
+        "jp": "スピードシンボリ",
+        "aliases": [
+            "speed symboli"
+        ]
+    },
+    {
+        "slug": "haiseiko",
+        "name": "Haiseiko",
+        "jp": "ハイセイコー",
+        "aliases": [
+            "haiseiko"
+        ]
+    },
+    {
+        "slug": "tucker-bryne",
+        "name": "Tucker Bryne",
+        "jp": "タッカーブライン",
+        "aliases": [
+            "tucker bryne"
+        ]
+    },
+    {
+        "slug": "hoshina-kiyoko",
+        "name": "Hoshina Kiyoko",
+        "jp": "保科健子",
+        "aliases": [
+            "hoshina"
+        ]
+    },
+    {
+        "slug": "yunohana-bloom",
+        "name": "Yunohana Bloom",
+        "jp": "ユノハナブルーム",
+        "aliases": [
+            "yunohana",
+            "bloom"
+        ]
+    },
+    {
+        "slug": "casino-drive",
+        "name": "Casino Drive",
+        "jp": "カジノドライヴ",
+        "aliases": [
+            "casino drive"
+        ]
+    },
+    {
+        "slug": "akasaka-misato",
+        "name": "Akasaka Misato",
+        "jp": "赤坂美聡",
+        "aliases": [
+            "akasaka",
+            "misato"
+        ]
+    },
+    {
+        "slug": "hosoe-junko",
+        "name": "Hosoe Junko",
+        "jp": "細江純子",
+        "aliases": [
+            "hosoe",
+            "junko"
         ]
     }
 ]

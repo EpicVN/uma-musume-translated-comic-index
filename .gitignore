@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/check-tags.ts
 
 # next.js
 /.next/

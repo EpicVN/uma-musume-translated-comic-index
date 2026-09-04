@@ -80,25 +80,39 @@ export default function TweetGridCard({
       {/* 1. Manga Preview Card */}
       <div className="flex flex-col bg-[#151f2e] rounded-xl overflow-hidden border border-[#1e2d42] hover:border-[#3db4f2]/70 transition-all duration-200 shadow-md hover:shadow-lg hover:shadow-[#3db4f2]/10 p-3">
         {/* Header Tag & Date */}
-        <div className="flex items-center justify-between gap-1 text-[10px] pb-2 border-b border-[#1e2d42]/60 shrink-0">
-          <div className="flex flex-wrap gap-1 overflow-hidden h-5">
+        <div className="flex items-center justify-between gap-1 text-[10px] pb-2 border-b border-[#1e2d42]/60 shrink-0 h-7">
+          <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
             {tags.length > 0 ? (
-              tags.slice(0, 1).map((t) => (
-                <span
-                  key={t.id}
-                  className="font-bold bg-[#0b1622] text-[#3db4f2] px-1.5 py-0.5 rounded border border-[#27364b] truncate max-w-32.5"
-                >
-                  {t.name}
-                </span>
-              ))
+              <>
+                {tags.slice(0, 2).map((t) => (
+                  <span
+                    key={t.id}
+                    className="font-bold bg-[#0b1622] text-[#3db4f2] px-1.5 py-0.5 rounded border border-[#27364b] truncate max-w-22.5 shrink-0"
+                    title={t.name}
+                  >
+                    {t.name}
+                  </span>
+                ))}
+                {tags.length > 2 && (
+                  <span
+                    className="font-bold bg-[#0b1622] text-[#8ba0b2] px-1 py-0.5 rounded border border-[#27364b] shrink-0 cursor-default"
+                    title={tags
+                      .slice(2)
+                      .map((t) => t.name)
+                      .join(", ")}
+                  >
+                    +{tags.length - 2}
+                  </span>
+                )}
+              </>
             ) : (
-              <span className="text-[#8ba0b2] bg-[#0b1622] px-1.5 py-0.5 rounded border border-[#27364b]">
+              <span className="text-[#8ba0b2] bg-[#0b1622] px-1.5 py-0.5 rounded border border-[#27364b] shrink-0">
                 Uma Musume
               </span>
             )}
           </div>
           {formattedDate && (
-            <span className="text-[#5a6f82] font-semibold shrink-0">
+            <span className="text-[#5a6f82] font-semibold shrink-0 ml-1">
               {formattedDate}
             </span>
           )}
@@ -196,12 +210,14 @@ export default function TweetGridCard({
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="sticky top-0 z-20 flex items-center justify-between px-5 py-3.5 bg-[#151f2e]/95 backdrop-blur-md border-b border-[#22334a] shrink-0">
-              <div className="flex flex-wrap items-center gap-2.5 min-w-0 pr-2">
+            <div className="sticky top-0 z-20 flex items-center justify-between px-5 py-3 bg-[#151f2e]/95 backdrop-blur-md border-b border-[#22334a] shrink-0 gap-3">
+              <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
                 <span className="text-white font-bold text-sm sm:text-base tracking-wide shrink-0">
                   Uma Musume Translation
                 </span>
-                <div className="inline-flex items-center gap-1.5 bg-[#0b1622] px-2.5 py-1 rounded-md border border-[#27364b] text-xs min-w-0">
+
+                {/* Artist & Translator Badge */}
+                <div className="inline-flex items-center gap-1.5 bg-[#0b1622] px-2.5 py-1 rounded-md border border-[#27364b] text-xs shrink-0">
                   <span
                     className="text-[#8ba0b2] font-medium truncate max-w-35 sm:max-w-50"
                     title={artistName}
@@ -213,12 +229,27 @@ export default function TweetGridCard({
                     {formatHandle(translatorName)}
                   </span>
                 </div>
+
+                {/* Full Tags List inside Modal */}
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {tags.map((t) => (
+                      <span
+                        key={t.id}
+                        className="text-[11px] font-bold bg-[#0b1622] text-[#3db4f2] px-2 py-0.5 rounded border border-[#27364b]"
+                      >
+                        #{t.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
+              {/* Close Button */}
               <button
                 type="button"
                 onClick={() => setIsOpenModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#0b1622] text-[#8ba0b2] hover:text-white hover:bg-rose-600 border border-[#27364b] hover:border-rose-500 transition-colors duration-150 cursor-pointer text-xs font-bold shrink-0"
+                className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#0b1622] text-[#8ba0b2] hover:text-white hover:bg-rose-600 border border-[#27364b] hover:border-rose-500 transition-colors duration-150 cursor-pointer text-xs font-bold shrink-0 ml-2"
                 title="Close (Esc)"
               >
                 ✕
