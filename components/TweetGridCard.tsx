@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import { Tweet, useTweet } from "react-tweet";
 
@@ -17,6 +18,7 @@ interface TweetGridCardProps {
   language: string;
   tags?: TagItem[];
   postedAt?: Date | string;
+  priority?: boolean;
 }
 
 function formatHandle(handle: string) {
@@ -32,6 +34,7 @@ export default function TweetGridCard({
   language,
   tags = [],
   postedAt,
+  priority = false,
 }: TweetGridCardProps) {
   const [isOpenModal, setIsOpenModal] = useState(false);
 
@@ -75,7 +78,7 @@ export default function TweetGridCard({
   return (
     <>
       {/* 1. Card Manga Ngoài Grid */}
-      <div className="flex flex-col h-[520px] bg-[#151f2e] rounded-xl overflow-hidden border border-[#1e2d42] hover:border-[#3db4f2]/70 transition-all duration-200 shadow-md hover:shadow-lg hover:shadow-[#3db4f2]/10 p-3">
+      <div className="flex flex-col h-130 bg-[#151f2e] rounded-xl overflow-hidden border border-[#1e2d42] hover:border-[#3db4f2]/70 transition-all duration-200 shadow-md hover:shadow-lg hover:shadow-[#3db4f2]/10 p-3">
         {/* Header Tag & Date */}
         <div className="flex items-center justify-between gap-1 text-[10px] pb-2 border-b border-[#1e2d42]/60 shrink-0">
           <div className="flex flex-wrap gap-1 overflow-hidden h-5">
@@ -83,7 +86,7 @@ export default function TweetGridCard({
               tags.slice(0, 1).map((t) => (
                 <span
                   key={t.id}
-                  className="font-bold bg-[#0b1622] text-[#3db4f2] px-1.5 py-0.5 rounded border border-[#27364b] truncate max-w-[130px]"
+                  className="font-bold bg-[#0b1622] text-[#3db4f2] px-1.5 py-0.5 rounded border border-[#27364b] truncate max-w-32.5"
                 >
                   {t.name}
                 </span>
@@ -112,11 +115,13 @@ export default function TweetGridCard({
               <span className="text-[11px]">Loading art...</span>
             </div>
           ) : firstPhotoUrl ? (
-            <img
+            <Image
               src={firstPhotoUrl}
               alt="Manga Preview"
-              loading="lazy"
-              className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              priority={priority}
+              className="object-cover object-top group-hover:scale-105 transition-transform duration-300"
             />
           ) : (
             <div className="text-zinc-500 text-xs px-3 text-center">
@@ -132,7 +137,7 @@ export default function TweetGridCard({
           )}
 
           {/* Lớp phủ hover mở đọc nhanh */}
-          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#0b1622] via-[#0b1622]/60 to-transparent flex items-end justify-center pb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <div className="absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-[#0b1622] via-[#0b1622]/60 to-transparent flex items-end justify-center pb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <span className="text-[11px] font-semibold text-[#3db4f2] bg-[#0b1622]/90 px-3 py-1 rounded-full border border-[#3db4f2]/40 shadow-md">
               📖 Click to read
             </span>
@@ -144,7 +149,7 @@ export default function TweetGridCard({
           <div className="flex justify-between items-center text-[11px]">
             <span className="text-[#8ba0b2]">Artist:</span>
             <span
-              className="font-bold text-white truncate max-w-[120px]"
+              className="font-bold text-white truncate max-w-30"
               title={artistName}
             >
               {artistName}
@@ -153,7 +158,7 @@ export default function TweetGridCard({
 
           <div className="flex justify-between items-center text-[11px]">
             <span className="text-[#8ba0b2]">Translator:</span>
-            <span className="text-[#3db4f2] font-semibold truncate max-w-[120px]">
+            <span className="text-[#3db4f2] font-semibold truncate max-w-30">
               {formatHandle(translatorName)}
             </span>
           </div>
@@ -195,7 +200,10 @@ export default function TweetGridCard({
                   Uma Musume Translation
                 </span>
                 <div className="inline-flex items-center gap-1.5 bg-[#0b1622] px-2.5 py-1 rounded-md border border-[#27364b] text-xs min-w-0">
-                  <span className="text-[#8ba0b2] font-medium truncate max-w-[140px] sm:max-w-[200px]" title={artistName}>
+                  <span
+                    className="text-[#8ba0b2] font-medium truncate max-w-35 sm:max-w-50"
+                    title={artistName}
+                  >
                     {artistName}
                   </span>
                   <span className="text-[#3db4f2] font-bold shrink-0">➔</span>
@@ -234,7 +242,7 @@ export default function TweetGridCard({
                     </a>
                   </div>
                   <div
-                    className="w-full max-w-[420px] [data-theme='dark'] [&_.react-tweet-theme]:!bg-[#0b1622] [&_.react-tweet-theme]:!border-[#1e2d42] [&_.react-tweet-theme]:!rounded-lg"
+                    className="w-full max-w-105 [data-theme='dark'] [&_.react-tweet-theme]:bg-[#0b1622]! [&_.react-tweet-theme]:border-[#1e2d42]! [&_.react-tweet-theme]:rounded-lg!"
                     data-theme="dark"
                   >
                     <Tweet id={origId} />
@@ -257,7 +265,7 @@ export default function TweetGridCard({
                     </a>
                   </div>
                   <div
-                    className="w-full max-w-[420px] [data-theme='dark'] [&_.react-tweet-theme]:!bg-[#0b1622] [&_.react-tweet-theme]:!border-[#1e2d42] [&_.react-tweet-theme]:!rounded-lg [&_.react-tweet-theme_.react-tweet-quoted-tweet]:!hidden"
+                    className="w-full max-w-105 [data-theme='dark'] [&_.react-tweet-theme]:bg-[#0b1622]! [&_.react-tweet-theme]:border-[#1e2d42]! [&_.react-tweet-theme]:rounded-lg! [&_.react-tweet-theme_.react-tweet-quoted-tweet]:hidden!"
                     data-theme="dark"
                   >
                     <Tweet id={transId} />

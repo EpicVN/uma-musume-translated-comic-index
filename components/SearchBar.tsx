@@ -53,7 +53,7 @@ export default function SearchBar() {
   };
 
   return (
-    <div className="flex flex-col gap-1.5 flex-1 min-w-[160px]">
+    <div className="flex flex-col gap-1.5 flex-1 min-w-40">
       <label className="text-[10px] font-bold tracking-wider text-[#8ba0b2] uppercase">
         Search
       </label>

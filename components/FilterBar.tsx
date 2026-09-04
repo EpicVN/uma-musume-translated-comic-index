@@ -31,10 +31,20 @@ export default function FilterBar({ tags, artists, translators }: FilterBarProps
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
 
+  const searchQuery = searchParams.get('q') || '';
   const selectedTag = searchParams.get('tag') || 'all';
   const selectedArtist = searchParams.get('artist') || 'all';
   const selectedTranslator = searchParams.get('translator') || 'all';
   const selectedSort = searchParams.get('sort') || 'newest';
+
+  // Kiểm tra xem đang có filter nào được kích hoạt hay không
+  const isFiltered = Boolean(
+    searchQuery ||
+    (selectedTag && selectedTag !== 'all') ||
+    (selectedArtist && selectedArtist !== 'all') ||
+    (selectedTranslator && selectedTranslator !== 'all') ||
+    (selectedSort && selectedSort !== 'newest')
+  );
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -52,14 +62,20 @@ export default function FilterBar({ tags, artists, translators }: FilterBarProps
     });
   };
 
+  const handleReset = () => {
+    startTransition(() => {
+      router.push('/');
+    });
+  };
+
   return (
     <div className="bg-[#151f2e] border border-[#1e2d42] rounded-2xl p-4 sm:p-5 mb-8 shadow-lg shadow-black/20">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto] gap-4 items-end">
         {/* 1. Search text */}
         <SearchBar />
 
         {/* 2. Character Filter (Searchable Combobox) */}
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[170px]">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-42.5">
           <label className="text-[10px] font-bold tracking-wider text-[#8ba0b2] uppercase">
             Character
           </label>
@@ -67,7 +83,7 @@ export default function FilterBar({ tags, artists, translators }: FilterBarProps
         </div>
 
         {/* 3. Original Artist Filter */}
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[180px]">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-45">
           <label className="text-[10px] font-bold tracking-wider text-[#8ba0b2] uppercase">
             Original Artist
           </label>
@@ -80,7 +96,7 @@ export default function FilterBar({ tags, artists, translators }: FilterBarProps
         </div>
 
         {/* 4. Translator Filter */}
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[180px]">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-45">
           <label className="text-[10px] font-bold tracking-wider text-[#8ba0b2] uppercase">
             Translator
           </label>
@@ -93,7 +109,7 @@ export default function FilterBar({ tags, artists, translators }: FilterBarProps
         </div>
 
         {/* 5. Sort Order */}
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[140px]">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-35">
           <label className="text-[10px] font-bold tracking-wider text-[#8ba0b2] uppercase">
             Sort
           </label>
@@ -105,6 +121,38 @@ export default function FilterBar({ tags, artists, translators }: FilterBarProps
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
           </select>
+        </div>
+
+        {/* 6. Reset Filters Button */}
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={handleReset}
+            disabled={!isFiltered}
+            title="Reset Filters"
+            className={`h-10 px-3.5 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 select-none ${
+              isFiltered
+                ? "bg-[#18283b] hover:bg-[#203650] text-[#3db4f2] border-[#273d5a] hover:border-[#3db4f2]/60 shadow-md shadow-[#3db4f2]/10 cursor-pointer"
+                : "bg-[#0b1622] text-[#4b6075] border-[#27364b]/50 cursor-not-allowed opacity-40"
+            }`}
+          >
+            <svg
+              className={`w-3.5 h-3.5 transition-transform duration-300 ${
+                isFiltered ? "hover:-rotate-90" : ""
+              }`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            <span>Reset</span>
+          </button>
         </div>
       </div>
     </div>

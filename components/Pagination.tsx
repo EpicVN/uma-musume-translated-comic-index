@@ -67,7 +67,7 @@ export default function Pagination({ currentPage, totalPages }: PaginationProps)
           <>
             <button
               onClick={() => navigateToPage(1)}
-              className="min-w-[32px] h-8 px-2 rounded-lg bg-[#0b1622] text-[#8ba0b2] hover:text-white hover:bg-[#1e2d42] font-semibold transition border border-transparent hover:border-[#27364b] cursor-pointer"
+              className="min-w-8 h-8 px-2 rounded-lg bg-[#0b1622] text-[#8ba0b2] hover:text-white hover:bg-[#1e2d42] font-semibold transition border border-transparent hover:border-[#27364b] cursor-pointer"
             >
               1
             </button>
@@ -82,7 +82,7 @@ export default function Pagination({ currentPage, totalPages }: PaginationProps)
             <button
               key={p}
               onClick={() => navigateToPage(p)}
-              className={`min-w-[32px] h-8 px-2 rounded-lg font-bold transition cursor-pointer ${
+              className={`min-w-8 h-8 px-2 rounded-lg font-bold transition cursor-pointer ${
                 isActive
                   ? 'bg-[#3db4f2] text-white shadow-md shadow-[#3db4f2]/30 scale-105'
                   : 'bg-[#0b1622] text-[#8ba0b2] hover:text-white hover:bg-[#1e2d42] border border-transparent hover:border-[#27364b]'
@@ -99,7 +99,7 @@ export default function Pagination({ currentPage, totalPages }: PaginationProps)
             {endPage < totalPages - 1 && <span className="text-[#5a6f82] px-1">...</span>}
             <button
               onClick={() => navigateToPage(totalPages)}
-              className="min-w-[32px] h-8 px-2 rounded-lg bg-[#0b1622] text-[#8ba0b2] hover:text-white hover:bg-[#1e2d42] font-semibold transition border border-transparent hover:border-[#27364b] cursor-pointer"
+              className="min-w-8 h-8 px-2 rounded-lg bg-[#0b1622] text-[#8ba0b2] hover:text-white hover:bg-[#1e2d42] font-semibold transition border border-transparent hover:border-[#27364b] cursor-pointer"
             >
               {totalPages}
             </button>

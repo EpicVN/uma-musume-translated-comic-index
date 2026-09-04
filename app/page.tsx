@@ -4,6 +4,7 @@ import { PrismaClient, Prisma } from "@prisma/client";
 import FilterBar from "@/components/FilterBar";
 import Pagination from "@/components/Pagination";
 import TweetGridCard from "@/components/TweetGridCard";
+import Link from "next/link";
 
 const prisma = new PrismaClient();
 const PAGE_SIZE = 12;
@@ -91,31 +92,32 @@ export default async function HomePage({ searchParams }: PageProps) {
   return (
     <main className="min-h-screen bg-[#0b1622] text-[#bcbedc] px-4 sm:px-8 md:px-12 py-8">
       {/* Header Bar AniList */}
-      <div className="flex items-center justify-between mb-8 pb-4 border-b border-[#1e2d42]">
-        <div className="flex items-center gap-3">
-          <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-[#27364b] shadow-md shadow-[#3db4f2]/20 shrink-0 bg-[#0b1622]">
-            <Image
-              src="/logo.png"
-              alt="UmaIndex Logo"
-              fill
-              className="object-cover"
-            />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white tracking-wide">
-              UmaIndex
-            </h1>
-            <p className="text-xs text-[#8ba0b2]">
-              Uma Musume Translated Comic Archive
-            </p>
-          </div>
+      <Link
+        href="/"
+        className="group inline-flex items-center gap-3.5 select-none transition-all duration-200"
+      >
+        {/* Logo Icon có hiệu ứng hover border và shadow */}
+        <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-[#27364b] bg-[#0b1622] shrink-0 shadow-sm transition-all duration-300 group-hover:border-[#3db4f2]/60 group-hover:shadow-lg group-hover:shadow-[#3db4f2]/20 group-hover:scale-105">
+          <Image
+            src="/logo.png"
+            alt="UmaIndex Logo"
+            fill
+            sizes="40px"
+            className="object-cover"
+            priority
+          />
         </div>
 
-        <div className="text-xs font-semibold text-[#8ba0b2] bg-[#151f2e] px-3.5 py-1.5 rounded-full border border-[#27364b]">
-          Total: <span className="text-[#3db4f2] font-bold">{totalCount}</span>{" "}
-          Comics
+        {/* Tiêu đề & phụ đề */}
+        <div className="flex flex-col">
+          <h1 className="text-xl font-extrabold tracking-tight text-white transition-colors duration-200 group-hover:text-[#3db4f2]">
+            UmaIndex
+          </h1>
+          <p className="text-xs text-[#8ba0b2] transition-colors duration-200 group-hover:text-slate-300">
+            Uma Musume Translated Comic Archive
+          </p>
         </div>
-      </div>
+      </Link>
 
       {/* Filter Bar */}
       <FilterBar tags={allTags} artists={artists} translators={translators} />
@@ -130,7 +132,7 @@ export default async function HomePage({ searchParams }: PageProps) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
-          {posts.map((post) => (
+          {posts.map((post, index) => (
             <TweetGridCard
               key={post.id}
               origId={post.originalPost.tweetId}
@@ -140,6 +142,7 @@ export default async function HomePage({ searchParams }: PageProps) {
               language={post.language}
               tags={post.originalPost.tags.map((pt) => pt.tag)}
               postedAt={post.postedAt}
+              priority={index < 4}
             />
           ))}
         </div>
