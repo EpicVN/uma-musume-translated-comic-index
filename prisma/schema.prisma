@@ -6,11 +6,11 @@ datasource db {
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["fullTextSearchPostgres"] // Hỗ trợ tìm kiếm toàn văn Postgres
+  previewFeatures = ["fullTextSearchPostgres"]
 }
 
 // -------------------------------------------------------------
-// 1. TÀI KHOẢN TÁC GIẢ & DỊCH GIẢ
+// 1. Artist & Translator
 // -------------------------------------------------------------
 enum CreatorRole {
   ARTIST
@@ -19,19 +19,19 @@ enum CreatorRole {
 }
 
 model Creator {
-  id          String      @id @default(cuid())
-  handle      String      @unique // VD: @EDemocraft, @siro_chidori
-  name        String      // Display Name hiển thị
-  avatarUrl   String?
-  profileUrl  String
-  role        CreatorRole @default(ARTIST)
-  isTarget    Boolean     @default(false) // Dành cho scraper biết có cần theo dõi cron không
-  filterTags  String?     // Tag lọc mặc định (VD: #UmaTranslations)
+  id         String      @id @default(cuid())
+  handle     String      @unique
+  name       String
+  avatarUrl  String?
+  profileUrl String
+  role       CreatorRole @default(ARTIST)
+  isTarget   Boolean     @default(false)
+  filterTags String?
 
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @default(now()) @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
-  // Quan hệ
+  // Relations
   originalPosts   OriginalPost[]   @relation("ArtistPosts")
   translatedPosts TranslatedPost[] @relation("TranslatorPosts")
 
@@ -40,97 +40,98 @@ model Creator {
 }
 
 // -------------------------------------------------------------
-// 2. BÀI VẼ GỐC CỦA HỌA SĨ (Original Post)
+// 2. Original Post
 // -------------------------------------------------------------
 model OriginalPost {
-  id          String   @id @default(cuid())
-  tweetId     String   @unique
-  tweetUrl    String
-  content     String?  @db.Text
-  postedAt    DateTime
-  mediaCount  Int      @default(1)
+  id         String   @id @default(cuid())
+  tweetId    String   @unique
+  tweetUrl   String
+  content    String?  @db.Text
+  postedAt   DateTime
+  mediaCount Int      @default(1)
 
-  artistId    String
-  artist      Creator  @relation("ArtistPosts", fields: [artistId], references: [id], onDelete: Cascade)
+  artistId String
+  artist   Creator @relation("ArtistPosts", fields: [artistId], references: [id], onDelete: Cascade)
 
-  // Series / Nhóm truyện nếu có nhiều kỳ
-  seriesId    String?
-  series      Series?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  // Series
+  seriesId String?
+  series   Series? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   translations TranslatedPost[]
   tags         PostTag[]
 
   @@index([artistId])
-  @@index([postedAt(sort: Desc)]) // Sắp xếp theo ngày đăng mới nhất siêu tốc
+  @@index([postedAt(sort: Desc)])
+  @@index([artistId, postedAt(sort: Desc)]) // Tối ưu khi lọc theo Artist + sort ngày gốc
   @@index([seriesId])
 }
 
 // -------------------------------------------------------------
-// 3. BẢN DỊCH (Translated Post)
+// 3. Translated Post
 // -------------------------------------------------------------
 model TranslatedPost {
-  id              String       @id @default(cuid())
-  tweetId         String       @unique
-  tweetUrl        String
-  language        String       @default("en") // en, vi, etc.
-  content         String?      @db.Text
-  postedAt        DateTime
+  id       String   @id @default(cuid())
+  tweetId  String   @unique
+  tweetUrl String
+  language String   @default("en") // en, vi, etc.
+  content  String?  @db.Text
+  postedAt DateTime
 
-  translatorId    String
-  translator      Creator      @relation("TranslatorPosts", fields: [translatorId], references: [id], onDelete: Cascade)
+  translatorId String
+  translator   Creator @relation("TranslatorPosts", fields: [translatorId], references: [id], onDelete: Cascade)
 
-  originalPostId  String
-  originalPost    OriginalPost @relation(fields: [originalPostId], references: [id], onDelete: Cascade)
+  originalPostId String
+  originalPost   OriginalPost @relation(fields: [originalPostId], references: [id], onDelete: Cascade)
 
-  // Đánh dấu duyệt/chất lượng
-  isVerified      Boolean      @default(true) 
-  viewCount       Int          @default(0)
+  isVerified Boolean @default(true)
+  viewCount  Int     @default(0)
 
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @default(now()) @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([translatorId])
   @@index([originalPostId])
   @@index([postedAt(sort: Desc)])
+  @@index([translatorId, postedAt(sort: Desc)]) // Tối ưu khi lọc theo Translator + sort ngày TL
 }
 
 // -------------------------------------------------------------
-// 4. HỆ THỐNG NHÃN & NHÂN VẬT (Characters & Tags)
+// 4. Characters & Tags
 // -------------------------------------------------------------
 enum TagCategory {
-  CHARACTER // Nhân vật (Manhattan Cafe, Silence Suzuka,...)
-  THEME     // Thể loại (Fluff, Comedy, Drama, Romance,...)
-  EVENT     // Sự kiện (Summer Camp, Valentine, Derby,...)
+  CHARACTER
+  THEME
+  EVENT
 }
 
 model Tag {
-  id          String       @id @default(cuid())
-  slug        String       @unique // manhattan-cafe, rice-shower
-  name        String       // Manhattan Cafe
-  jpName      String?      // マンハッタンカフェ (Dùng để auto-tag khi cào text gốc)
-  category    TagCategory  @default(CHARACTER)
-  colorCode   String?      // Mã màu hex hiển thị badge trên web (VD: #4A5568)
+  id        String      @id @default(cuid())
+  slug      String      @unique
+  name      String
+  jpName    String?
+  category  TagCategory @default(CHARACTER)
+  colorCode String?
 
-  posts       PostTag[]
+  posts PostTag[]
 
-  createdAt   DateTime     @default(now())
+  createdAt DateTime @default(now())
 
   @@index([slug])
   @@index([category])
   @@index([jpName])
 }
 
-// Bảng liên kết n-n giữa Bài đăng gốc và Tag
+// For many-to-many relationship between OriginalPost and Tag
 model PostTag {
-  postId      String
-  tagId       String
-  isManual    Boolean      @default(false) // true: admin gắn bằng tay, false: bot tự nhận diện
+  postId   String
+  tagId    String
+  isManual Boolean @default(false)
 
-  post        OriginalPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  tag         Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  post OriginalPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([postId, tagId])
   @@index([postId])
@@ -138,7 +139,7 @@ model PostTag {
 }
 
 // -------------------------------------------------------------
-// 5. SERIES / TRUYỆN DÀI KỲ
+// 5. SERIES
 // -------------------------------------------------------------
 model Series {
   id          String         @id @default(cuid())
@@ -147,8 +148,8 @@ model Series {
   description String?        @db.Text
   posts       OriginalPost[]
 
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @default(now()) @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([slug])
 }

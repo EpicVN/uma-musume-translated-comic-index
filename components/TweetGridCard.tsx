@@ -78,7 +78,7 @@ export default function TweetGridCard({
   return (
     <>
       {/* 1. Manga Preview Card */}
-      <div className="flex flex-col h-130 bg-[#151f2e] rounded-xl overflow-hidden border border-[#1e2d42] hover:border-[#3db4f2]/70 transition-all duration-200 shadow-md hover:shadow-lg hover:shadow-[#3db4f2]/10 p-3">
+      <div className="flex flex-col bg-[#151f2e] rounded-xl overflow-hidden border border-[#1e2d42] hover:border-[#3db4f2]/70 transition-all duration-200 shadow-md hover:shadow-lg hover:shadow-[#3db4f2]/10 p-3">
         {/* Header Tag & Date */}
         <div className="flex items-center justify-between gap-1 text-[10px] pb-2 border-b border-[#1e2d42]/60 shrink-0">
           <div className="flex flex-wrap gap-1 overflow-hidden h-5">
@@ -104,9 +104,9 @@ export default function TweetGridCard({
           )}
         </div>
 
-        {/* Manga Preview */}
+        {/* Manga Preview - Cố định aspect-[3/4] chống nhảy layout */}
         <div
-          className="relative flex-1 w-full my-2 overflow-hidden rounded-lg bg-[#0b1622] cursor-pointer group flex items-center justify-center border border-[#1e2d42]/40"
+          className="relative w-full aspect-3/4 my-2 overflow-hidden rounded-lg bg-[#0b1622] cursor-pointer group flex items-center justify-center border border-[#1e2d42]/40 shrink-0"
           onClick={() => setIsOpenModal(true)}
         >
           {isLoading ? (
@@ -117,10 +117,12 @@ export default function TweetGridCard({
           ) : firstPhotoUrl ? (
             <Image
               src={firstPhotoUrl}
-              alt="Manga Preview"
+              alt={`Comic Preview by ${artistName}`}
               fill
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
               priority={priority}
+              loading={priority ? "eager" : "lazy"}
+              referrerPolicy="no-referrer"
               className="object-cover object-top group-hover:scale-105 transition-transform duration-300"
             />
           ) : (
@@ -131,13 +133,13 @@ export default function TweetGridCard({
 
           {/* Page Badge */}
           {tweet?.mediaDetails && tweet.mediaDetails.length > 1 && (
-            <span className="absolute top-2 right-2 bg-black/75 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/10">
+            <span className="absolute top-2 right-2 bg-black/75 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/10 z-10">
               1/{tweet.mediaDetails.length} P
             </span>
           )}
 
           {/* Hover Overlay */}
-          <div className="absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-[#0b1622] via-[#0b1622]/60 to-transparent flex items-end justify-center pb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <div className="absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-[#0b1622] via-[#0b1622]/60 to-transparent flex items-end justify-center pb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
             <span className="text-[11px] font-semibold text-[#3db4f2] bg-[#0b1622]/90 px-3 py-1 rounded-full border border-[#3db4f2]/40 shadow-md">
               📖 Click to read
             </span>
@@ -145,7 +147,7 @@ export default function TweetGridCard({
         </div>
 
         {/* Footer Meta */}
-        <div className="pt-2 border-t border-[#1e2d42] space-y-1.5 shrink-0 text-xs">
+        <div className="pt-2 border-t border-[#1e2d42] space-y-1.5 shrink-0 text-xs mt-auto">
           <div className="flex justify-between items-center text-[11px]">
             <span className="text-[#8ba0b2]">Artist:</span>
             <span
@@ -223,7 +225,7 @@ export default function TweetGridCard({
               </button>
             </div>
 
-            {/* Manga Preview */}
+            {/* Modal Content */}
             <div className="overflow-y-auto p-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                 {/* Raw Tweet */}

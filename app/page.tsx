@@ -1,12 +1,125 @@
 import Image from "next/image";
 import { PrismaClient, Prisma } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import FilterBar from "@/components/FilterBar";
 import Pagination from "@/components/Pagination";
 import TweetGridCard from "@/components/TweetGridCard";
 import Link from "next/link";
 
-const prisma = new PrismaClient();
+// 1. Use a single PrismaClient instance for the entire app to prevent exhausting database connections
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+const prisma = globalForPrisma.prisma || new PrismaClient();
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+
 const PAGE_SIZE = 12;
+
+// 2. Cache filter options (tags, artists, translators) for 1 hour
+const getFilterOptions = unstable_cache(
+  async () => {
+    const [allTags, artists, translators] = await Promise.all([
+      prisma.tag.findMany({ orderBy: { name: "asc" } }),
+      prisma.creator.findMany({
+        where: { originalPosts: { some: {} } },
+        orderBy: { name: "asc" },
+      }),
+      prisma.creator.findMany({
+        where: { translatedPosts: { some: {} } },
+        orderBy: { name: "asc" },
+      }),
+    ]);
+    return { allTags, artists, translators };
+  },
+  ["filter-options-data"],
+  { revalidate: 3600, tags: ["filter-options"] },
+);
+
+interface FilterQuery {
+  page: number;
+  q: string;
+  tag: string;
+  artist: string;
+  translator: string;
+  sort: string;
+}
+
+// 3. Cache the list of posts based on filter query for 1 minute
+const getCachedPosts = (filter: FilterQuery) => {
+  // Chuẩn hóa chuỗi tìm kiếm
+  const cleanQuery = filter.q?.trim() || "";
+
+  // Dùng cleanQuery trong cacheKey để đồng nhất dữ liệu cache
+  const cacheKey = `posts-${filter.page}-${cleanQuery}-${filter.tag}-${filter.artist}-${filter.translator}-${filter.sort}`;
+
+  return unstable_cache(
+    async () => {
+      const where: Prisma.TranslatedPostWhereInput = {};
+      const originalPostWhere: Prisma.OriginalPostWhereInput = {};
+
+      // BƯỚC 2: Chỉ kích hoạt full scan khi từ khóa có từ 2 ký tự trở lên
+      if (cleanQuery.length >= 2) {
+        where.OR = [
+          { content: { contains: cleanQuery, mode: "insensitive" } },
+          {
+            originalPost: {
+              content: { contains: cleanQuery, mode: "insensitive" },
+            },
+          },
+        ];
+      }
+
+      if (filter.translator && filter.translator !== "all") {
+        where.translator = { handle: filter.translator };
+      }
+
+      if (filter.artist && filter.artist !== "all") {
+        originalPostWhere.artist = { handle: filter.artist };
+      }
+
+      if (filter.tag && filter.tag !== "all") {
+        originalPostWhere.tags = { some: { tag: { slug: filter.tag } } };
+      }
+
+      if (Object.keys(originalPostWhere).length > 0) {
+        where.originalPost = originalPostWhere;
+      }
+
+      // Set the orderBy based on the sort option
+      let orderBy: Prisma.TranslatedPostOrderByWithRelationInput = {
+        postedAt: "desc",
+      };
+      if (filter.sort === "oldest") {
+        orderBy = { postedAt: "asc" };
+      } else if (filter.sort === "orig_newest") {
+        orderBy = { originalPost: { postedAt: "desc" } };
+      } else if (filter.sort === "orig_oldest") {
+        orderBy = { originalPost: { postedAt: "asc" } };
+      }
+
+      const [totalCount, posts] = await Promise.all([
+        prisma.translatedPost.count({ where }),
+        prisma.translatedPost.findMany({
+          where,
+          skip: (filter.page - 1) * PAGE_SIZE,
+          take: PAGE_SIZE,
+          orderBy,
+          include: {
+            translator: true,
+            originalPost: {
+              include: {
+                artist: true,
+                tags: { include: { tag: true } },
+              },
+            },
+          },
+        }),
+      ]);
+
+      return { totalCount, posts };
+    },
+    [cacheKey],
+    { revalidate: 60, tags: ["comics-feed"] },
+  )();
+};
 
 interface PageProps {
   searchParams: Promise<{
@@ -26,65 +139,21 @@ export default async function HomePage({ searchParams }: PageProps) {
   const tagSlug = params.tag || "";
   const artistHandle = params.artist || "";
   const translatorHandle = params.translator || "";
-  const sortBy = params.sort === "oldest" ? "asc" : "desc";
+  const sort = params.sort || "newest";
 
-  const where: Prisma.TranslatedPostWhereInput = {};
-  const originalPostWhere: Prisma.OriginalPostWhereInput = {};
-
-  if (searchQuery) {
-    where.OR = [
-      { content: { contains: searchQuery, mode: "insensitive" } },
-      {
-        originalPost: {
-          content: { contains: searchQuery, mode: "insensitive" },
-        },
-      },
-    ];
-  }
-
-  if (translatorHandle && translatorHandle !== "all") {
-    where.translator = { handle: translatorHandle };
-  }
-
-  if (artistHandle && artistHandle !== "all") {
-    originalPostWhere.artist = { handle: artistHandle };
-  }
-
-  if (tagSlug && tagSlug !== "all") {
-    originalPostWhere.tags = { some: { tag: { slug: tagSlug } } };
-  }
-
-  if (Object.keys(originalPostWhere).length > 0) {
-    where.originalPost = originalPostWhere;
-  }
-
-  const [totalCount, posts, allTags, artists, translators] = await Promise.all([
-    prisma.translatedPost.count({ where }),
-    prisma.translatedPost.findMany({
-      where,
-      skip: (currentPage - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      orderBy: { postedAt: sortBy },
-      include: {
-        translator: true,
-        originalPost: {
-          include: {
-            artist: true,
-            tags: { include: { tag: true } },
-          },
-        },
-      },
-    }),
-    prisma.tag.findMany({ orderBy: { name: "asc" } }),
-    prisma.creator.findMany({
-      where: { originalPosts: { some: {} } },
-      orderBy: { name: "asc" },
-    }),
-    prisma.creator.findMany({
-      where: { translatedPosts: { some: {} } },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  // Fetch filter options and posts concurrently
+  const [{ allTags, artists, translators }, { totalCount, posts }] =
+    await Promise.all([
+      getFilterOptions(),
+      getCachedPosts({
+        page: currentPage,
+        q: searchQuery,
+        tag: tagSlug,
+        artist: artistHandle,
+        translator: translatorHandle,
+        sort,
+      }),
+    ]);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 

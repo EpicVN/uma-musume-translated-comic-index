@@ -12,21 +12,25 @@ export default function SearchBar() {
   const [search, setSearch] = useState(queryQ);
   const [prevQueryQ, setPrevQueryQ] = useState(queryQ);
 
-  // If the query parameter changes (e.g., via browser navigation), update the search state to reflect it.
+  // Pattern chuẩn của React: Tự điều chỉnh state theo URL thay đổi mà không cần useEffect
   if (queryQ !== prevQueryQ) {
     setPrevQueryQ(queryQ);
     setSearch(queryQ);
   }
 
-  // Update the URL after the user stops typing
+  // Debounce 400ms và chỉ cập nhật URL khi dừng gõ
   useEffect(() => {
     if (search === queryQ) return;
 
     const timer = setTimeout(() => {
-      const params = new URLSearchParams(searchParams.toString());
       const trimmed = search.trim();
 
-      if (trimmed) {
+      // Nếu chỉ gõ đúng 1 ký tự, không gửi request để tránh query vô ích
+      if (trimmed.length === 1) return;
+
+      const params = new URLSearchParams(searchParams.toString());
+
+      if (trimmed.length >= 2) {
         params.set("q", trimmed);
       } else {
         params.delete("q");
@@ -41,6 +45,8 @@ export default function SearchBar() {
 
   const handleClear = () => {
     setSearch("");
+    if (!queryQ) return;
+
     const params = new URLSearchParams(searchParams.toString());
     params.delete("q");
     params.set("page", "1");
