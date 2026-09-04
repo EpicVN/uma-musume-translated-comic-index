@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# UmaIndex - Uma Musume Comic Archive
 
-## Getting Started
+A Next.js archive indexing translated *Uma Musume: Pretty Derby* short comics from X (Twitter).
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Tech Stack
+
+* **Frontend & Backend:** Next.js (App Router), Tailwind CSS
+* **Database & ORM:** PostgreSQL (Neon Serverless), Prisma
+* **Scraper:** Playwright (Node.js)
+
+---
+
+## Setup
+
+1. **Clone & install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Configure environment (`.env`):**
+   ```env
+   DATABASE_URL="postgresql://user:password@ep-xyz.neon.tech/neondb?sslmode=require"
+   TWITTER_COOKIES='[{"name":"auth_token","value":"...","domain":".x.com"}]'
+   ```
+
+3. **Initialize database:**
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   ```
+
+4. **Start development server:**
+   ```bash
+   npm run dev
+   ```
+
+---
+
+## Translator Configuration
+
+Target translators and search keywords are managed directly in `config/translators.json`. You can add or modify targets without touching the scraper codebase:
+
+```json
+[
+  {
+    "name": "Translator Name",
+    "handle": "TwitterHandleWithoutAt",
+    "language": "en",
+    "keywords": ["UmaTranslations", "ウマ娘英訳"],
+    "requireKeywordMatch": true
+  }
+]
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+* `handle`: X username without the `@` symbol.
+* `keywords`: Tags or project search terms queried alongside the user handle.
+* `requireKeywordMatch`: When `true`, ensures scraped posts must contain at least one keyword.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scraping & Scripts
 
-## Learn More
+* **Full Historical Crawl:** Scrapes all past translations across quarter-sliced intervals:
+  ```bash
+  npx tsx scripts/deep-scrape-range.ts
+  ```
 
-To learn more about Next.js, take a look at the following resources:
+* **Latest Updates Crawl:** Fetches only newly posted translations from recent dates:
+  ```bash
+  npx tsx scripts/update-latest.ts
+  ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+* **Re-run Tagging:** Re-scans existing posts in the database with updated character dictionaries:
+  ```bash
+  npx tsx scripts/retag-posts.ts
+  ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## Pipeline Overview
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+* **Timeline Search:** Scrapes target translators via date-sliced search queries (`from:user (keywords) since:... until:...`).
+* **Source Resolution:** Parses quote-tweets or embedded X status links to link the canonical original Japanese artist.
+* **Auto-Tagging:** Scans both translation text and original post content against character dictionaries (EN/JP/Slug) to bind relational tags.
