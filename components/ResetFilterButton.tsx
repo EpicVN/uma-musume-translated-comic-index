@@ -22,7 +22,9 @@ export default function ResetFilterButton() {
   );
 
   const handleReset = () => {
-    navigate("/");
+    searchParams.get("mode") === "cubari"
+      ? navigate("/?mode=cubari")
+      : navigate("/?mode=twitter");
   };
 
   return (

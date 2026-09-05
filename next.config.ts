@@ -14,6 +14,16 @@ const nextConfig: NextConfig = {
         hostname: "abs.twimg.com",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "full-moon-cafe.up.railway.app",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "mangadex.org",
+        pathname: "/**",
+      },
     ],
   },
   async headers() {
