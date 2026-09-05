@@ -38,6 +38,7 @@
             "maru",
             "maru-oba",
             "maruzensky",
+            "maruzen",
             "マルおば"
         ]
     },
@@ -88,6 +89,7 @@
         "jp": "ダイワスカーレット",
         "aliases": [
             "dasca",
+            "dasuka",
             "scarlet",
             "daiwa",
             "ダスカ"
@@ -129,7 +131,6 @@
         "aliases": [
             "mcqueen",
             "macc",
-            "big mack",
             "マックイーン",
             "マック"
         ]
@@ -139,10 +140,8 @@
         "name": "El Condor Pasa",
         "jp": "エルコンドルパサー",
         "aliases": [
-            "el",
             "elcon",
             "el con",
-            "エル",
             "エルコン"
         ]
     },
@@ -339,7 +338,6 @@
         "aliases": [
             "ayabe",
             "ayabe-san",
-            "adobe",
             "アヤベさん"
         ]
     },
@@ -409,8 +407,8 @@
         "jp": "ゴールドシチー",
         "aliases": [
             "gold city",
-            "golcity",
-            "gorshichi",
+            "shichi",
+            "city",
             "ゴルシチ"
         ]
     },
@@ -493,6 +491,7 @@
         "jp": "トーセンジョーダン",
         "aliases": [
             "jordan",
+            "tosen",
             "ジョーダン"
         ]
     },
@@ -617,6 +616,7 @@
         "aliases": [
             "king",
             "kingu",
+            "first rate",
             "キング"
         ]
     },
@@ -842,6 +842,7 @@
         "aliases": [
             "cheval",
             "cheval-chan",
+            "Chevacchi",
             "シュヴァル"
         ]
     },
@@ -852,7 +853,7 @@
         "aliases": [
             "verxina",
             "ヴィルシーナ",
-            "ville"
+            "xina"
         ]
     },
     {
@@ -894,6 +895,7 @@
             "gentil",
             "gentil donna",
             "don",
+            "Donna",
             "ジェンティル"
         ]
     },
@@ -904,6 +906,8 @@
         "aliases": [
             "almond",
             "almond eye",
+            "Ai",
+            "Ai-chan",
             "アーモンド"
         ]
     },
@@ -953,7 +957,6 @@
         "jp": "デアリングタクト",
         "aliases": [
             "daring tact",
-            "daring",
             "デアタク"
         ]
     },
@@ -983,7 +986,6 @@
         "jp": "デアリングハート",
         "aliases": [
             "daring heart",
-            "daring",
             "デアリングハート"
         ]
     },
@@ -1104,6 +1106,7 @@
         "aliases": [
             "miracle",
             "hishi miracle",
+            "Mirako",
             "ミラクル"
         ]
     },
@@ -1222,7 +1225,6 @@
         "name": "Loves Only You",
         "jp": "ラヴズオンリーユー",
         "aliases": [
-            "loves",
             "loves only you",
             "ラヴズ"
         ]
@@ -1234,6 +1236,7 @@
         "aliases": [
             "lucky",
             "lucky lilac",
+            "Lala",
             "ライラック"
         ]
     },
@@ -1560,6 +1563,8 @@
         "jp": "ルーラーシップ",
         "aliases": [
             "rulership",
+            "Ruler",
+            "Rurashi",
             "ルーラーシップ"
         ]
     },
@@ -1724,7 +1729,9 @@
         "name": "Sugar Lights",
         "jp": "シュガーライツ",
         "aliases": [
-            "sugar lights"
+            "sugar lights",
+            "professor",
+            "Prof"
         ]
     },
     {
