@@ -21,8 +21,16 @@ A Next.js archive indexing translated *Uma Musume: Pretty Derby* short comics fr
 
 2. **Configure environment (`.env`):**
    ```env
-   DATABASE_URL="postgresql://user:password@ep-xyz.neon.tech/neondb?sslmode=require"
-   TWITTER_COOKIES='[{"name":"auth_token","value":"...","domain":".x.com"}]'
+   # NeonDB connection strings
+   DATABASE_URL="postgresql://user:password@ep-xyz-pooler.neon.tech/neondb?sslmode=require"
+   DIRECT_URL="postgresql://user:password@ep-xyz.neon.tech/neondb?sslmode=require"
+
+   # Internal Security
+   CRON_SECRET="your-random-secure-string"
+
+   # X (Twitter) Scraper Credentials
+   TWITTER_AUTH_TOKEN="your_auth_token_cookie"
+   TWITTER_CT0="your_ct0_cookie"
    ```
 
 3. **Initialize database:**

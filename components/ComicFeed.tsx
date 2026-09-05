@@ -2,6 +2,8 @@ import { unstable_cache } from "next/cache";
 import { PrismaClient, Prisma } from "@prisma/client";
 import TweetGridCard from "@/components/TweetGridCard";
 import Pagination from "@/components/Pagination";
+import { getReaderFiles, type CubariData } from "@/lib/reader";
+import CubariGridCard from "./CubariGridCard";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
@@ -17,6 +19,29 @@ interface FilterQuery {
   translator: string;
   sort: string;
 }
+
+const getLatestChapterUpdate = (data: CubariData) =>
+  Object.values(data.chapters).reduce((latest, chapter) => {
+    const timestamp = Number(chapter.last_updated);
+    return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
+  }, 0);
+
+const readerFiles = (await getReaderFiles()).sort(
+  (a, b) => getLatestChapterUpdate(b.data) - getLatestChapterUpdate(a.data),
+);
+
+const searchCubariFiles = (query: string) => {
+  if (!query || query.trim().length < 2) return readerFiles;
+  const lowerQuery = query.toLowerCase();
+  return readerFiles.filter((file) => {
+    return (
+      file.data.title.toLowerCase().includes(lowerQuery) ||
+      file.data.description.toLowerCase().includes(lowerQuery) ||
+      file.data.artist.toLowerCase().includes(lowerQuery) ||
+      file.data.author.toLowerCase().includes(lowerQuery)
+    );
+  });
+};
 
 const getCachedPosts = (filter: FilterQuery) => {
   const cleanQuery = filter.q?.trim() || "";
@@ -96,6 +121,7 @@ interface ComicFeedProps {
   artist?: string;
   translator?: string;
   sort?: string;
+  mode?: string;
 }
 
 export default async function ComicFeed({
@@ -105,6 +131,7 @@ export default async function ComicFeed({
   artist,
   translator,
   sort,
+  mode,
 }: ComicFeedProps) {
   const currentPage = Number(page) || 1;
   const searchQuery = q || "";
@@ -112,6 +139,7 @@ export default async function ComicFeed({
   const artistHandle = artist || "";
   const translatorHandle = translator || "";
   const sortOption = sort || "newest";
+  const modeOption = mode || "twitter";
 
   const { totalCount, posts } = await getCachedPosts({
     page: currentPage,
@@ -121,6 +149,10 @@ export default async function ComicFeed({
     translator: translatorHandle,
     sort: sortOption,
   });
+
+  const totalPagesCubari = Math.ceil(
+    searchCubariFiles(searchQuery).length / PAGE_SIZE,
+  );
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
@@ -134,25 +166,42 @@ export default async function ComicFeed({
       </div>
     );
   }
-
-  return (
-    <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
-        {posts.map((post, index) => (
-          <TweetGridCard
-            key={post.id}
-            origId={post.originalPost.tweetId}
-            transId={post.tweetId}
-            artistName={post.originalPost.artist.name}
-            translatorName={post.translator.handle}
-            language={post.language}
-            tags={post.originalPost.tags.map((pt) => pt.tag)}
-            postedAt={post.postedAt}
-            priority={index < 4}
-          />
-        ))}
-      </div>
-      <Pagination currentPage={currentPage} totalPages={totalPages} />
-    </>
-  );
+  if (modeOption === "cubari") {
+    return (
+      <>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
+          {searchCubariFiles(searchQuery).map((entry, index) => (
+            <CubariGridCard
+              key={entry.id}
+              data={entry.data}
+              link={entry.cubariLink}
+              priority={index < 4}
+            />
+          ))}
+        </div>
+        <Pagination currentPage={currentPage} totalPages={totalPagesCubari} />
+      </>
+    );
+  } else {
+    return (
+      <>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
+          {posts.map((post, index) => (
+            <TweetGridCard
+              key={post.id}
+              origId={post.originalPost.tweetId}
+              transId={post.tweetId}
+              artistName={post.originalPost.artist.name}
+              translatorName={post.translator.handle}
+              language={post.language}
+              tags={post.originalPost.tags.map((pt) => pt.tag)}
+              postedAt={post.postedAt}
+              priority={index < 4}
+            />
+          ))}
+        </div>
+        <Pagination currentPage={currentPage} totalPages={totalPages} />
+      </>
+    );
+  }
 }

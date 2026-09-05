@@ -38,8 +38,10 @@ export default function SearchBar() {
     if (!queryQ) return;
 
     const params = new URLSearchParams(searchParams.toString());
+    const mode = params.get("mode");
     params.delete("q");
     params.set("page", "1");
+    params.set("mode", mode || "twitter");
     navigate(`/?${params.toString()}`);
   };
 
