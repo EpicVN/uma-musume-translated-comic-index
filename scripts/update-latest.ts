@@ -464,44 +464,76 @@ async function discoverLatestTweetIds(
   );
 
   try {
+    console.log(`   🌐 Đang mở URL tìm kiếm: ${searchUrl}`);
+
     await page.goto(searchUrl, {
       waitUntil: "domcontentloaded",
       timeout: 35000,
     });
 
-    // SỬA ĐIỂM 2: Debug redirect xem có bị đẩy về login hay checkpoint không
-    const currentUrl = page.url();
-    if (currentUrl.includes("/login") || currentUrl.includes("/i/flow/login")) {
+    // Chờ 3 giây để trang nạp JavaScript ban đầu
+    await sleep(3000);
+
+    // 1. Kiểm tra và in thông tin chẩn đoán URL/Tiêu đề
+    const actualUrl = page.url();
+    const actualTitle = await page.title();
+    console.log(`   📍 URL thực tế: ${actualUrl}`);
+    console.log(`   📑 Tiêu đề trang: "${actualTitle}"`);
+
+    if (actualUrl.includes("/login") || actualUrl.includes("/i/flow/login")) {
       console.error(
-        `   ❌ [Auth Error] Bị chuyển hướng về trang đăng nhập! Kiểm tra lại token cookie.`,
+        `   ❌ [Auth Error] Bị chuyển hướng về trang đăng nhập! Cookie bị từ chối hoặc hết hiệu lực trên IP này.`,
       );
     }
 
-    // Đợi render tweet selector với timeout 10 giây
+    // 2. Kiểm tra văn bản lỗi phổ biến trên giao diện X
+    const bodyText = await page.innerText("body").catch(() => "");
+    if (
+      bodyText.includes("Something went wrong") ||
+      bodyText.includes("Try reloading")
+    ) {
+      console.warn(
+        "   ⚠️ Phát hiện thông báo lỗi: 'Something went wrong. Try reloading'",
+      );
+    }
+    if (bodyText.includes("Sign in to X") || bodyText.includes("Log in")) {
+      console.warn("   ⚠️ Phát hiện popup / nội dung yêu cầu đăng nhập!");
+    }
+
+    // 3. Chụp ảnh màn hình debug cho translator đầu tiên (hoặc nếu có cờ lỗi)
+    if (target.handle === TARGET_TRANSLATORS[0].handle) {
+      await page
+        .screenshot({ path: "debug-first-search.png", fullPage: true })
+        .catch(() => {});
+      console.log(
+        `   📸 Đã chụp ảnh màn hình chẩn đoán: debug-first-search.png`,
+      );
+    }
+
+    // 4. Kiểm tra và bấm nút Retry nếu gặp
+    const retryBtn = page
+      .locator('button:has-text("Retry"), div[role="button"]:has-text("Retry")')
+      .first();
+
+    if (await retryBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+      console.log("   🔄 Phát hiện nút Retry, đang bấm thử lại...");
+      await retryBtn.click();
+      await sleep(3000);
+    }
+
+    // 5. Chờ tweet xuất hiện
     const tweetFound = await page
-      .waitForSelector('article[data-testid="tweet"]', { timeout: 10000 })
+      .waitForSelector('article[data-testid="tweet"]', { timeout: 8000 })
       .then(() => true)
       .catch(() => false);
 
     if (!tweetFound) {
-      // Xử lý nút Retry nếu data center bị chập chờn
-      const retryBtn = page
-        .locator(
-          'button:has-text("Retry"), div[role="button"]:has-text("Retry")',
-        )
-        .first();
-
-      if (await retryBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
-        console.log("   🔄 Phát hiện nút Retry, đang bấm lại...");
-        await retryBtn.click();
-        await sleep(3000);
-        await page
-          .waitForSelector('article[data-testid="tweet"]', { timeout: 8000 })
-          .catch(() => {});
-      }
+      console.log(
+        `   ⚠️ Không tìm thấy bài viết tweet nào xuất hiện trong DOM.`,
+      );
     }
 
-    await sleep(2500);
+    await sleep(1500);
 
     let emptyScrollCount = 0;
 
