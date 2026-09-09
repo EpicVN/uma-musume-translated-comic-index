@@ -457,127 +457,116 @@ async function discoverLatestTweetIds(
 ): Promise<string[]> {
   const page = await context.newPage();
   const discoveredIds = new Set<string>();
-
-  const keywordQuery =
-    target.keywords.length > 0 ? `(${target.keywords.join(" OR ")})` : "";
-  const query =
-    `from:${target.handle} ${keywordQuery} until:${CURRENT_QUARTER_WINDOW.until} since:${CURRENT_QUARTER_WINDOW.since}`.trim();
-  const searchUrl = `https://x.com/search?q=${encodeURIComponent(query)}&f=live`;
+  const cleanHandle = target.handle.replace(/^@/, "");
+  const profileUrl = `https://x.com/${cleanHandle}`;
 
   console.log(
-    `\n📅 [@${target.handle}] Scanning window: [${CURRENT_QUARTER_WINDOW.since} -> ${CURRENT_QUARTER_WINDOW.until}]`,
+    `\n📅 [@${cleanHandle}] Scanning profile window: [${CURRENT_QUARTER_WINDOW.since} -> ${CURRENT_QUARTER_WINDOW.until}]`,
   );
+  console.log(`   🌐 Đang mở profile: ${profileUrl}`);
 
   try {
-    console.log(`   🌐 Đang mở URL tìm kiếm: ${searchUrl}`);
-
-    await page.goto(searchUrl, {
+    await page.goto(profileUrl, {
       waitUntil: "domcontentloaded",
       timeout: 35000,
     });
 
-    // Chờ 3 giây để trang nạp JavaScript ban đầu
     await sleep(3000);
 
-    // 1. Kiểm tra và in thông tin chẩn đoán URL/Tiêu đề
     const actualUrl = page.url();
     const actualTitle = await page.title();
     console.log(`   📍 URL thực tế: ${actualUrl}`);
     console.log(`   📑 Tiêu đề trang: "${actualTitle}"`);
 
-    if (actualUrl.includes("/login") || actualUrl.includes("/i/flow/login")) {
-      console.error(
-        `   ❌ [Auth Error] Bị chuyển hướng về trang đăng nhập! Cookie bị từ chối hoặc hết hiệu lực trên IP này.`,
-      );
-    }
-
-    // 2. Kiểm tra văn bản lỗi phổ biến trên giao diện X
-    const bodyText = await page.innerText("body").catch(() => "");
-    if (
-      bodyText.includes("Something went wrong") ||
-      bodyText.includes("Try reloading")
-    ) {
-      console.warn(
-        "   ⚠️ Phát hiện thông báo lỗi: 'Something went wrong. Try reloading'",
-      );
-    }
-    if (bodyText.includes("Sign in to X") || bodyText.includes("Log in")) {
-      console.warn("   ⚠️ Phát hiện popup / nội dung yêu cầu đăng nhập!");
-    }
-
-    // 3. Chụp ảnh màn hình debug cho translator đầu tiên (hoặc nếu có cờ lỗi)
-    if (target.handle === TARGET_TRANSLATORS[0].handle) {
-      await page
-        .screenshot({ path: "debug-first-search.png", fullPage: true })
-        .catch(() => {});
-      console.log(
-        `   📸 Đã chụp ảnh màn hình chẩn đoán: debug-first-search.png`,
-      );
-    }
-
-    // 4. Kiểm tra và bấm nút Retry nếu gặp
-    const retryBtn = page
-      .locator('button:has-text("Retry"), div[role="button"]:has-text("Retry")')
-      .first();
-
-    if (await retryBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
-      console.log("   🔄 Phát hiện nút Retry, đang bấm thử lại...");
-      await retryBtn.click();
-      await sleep(3000);
-    }
-
-    // 5. Chờ tweet xuất hiện
+    // Chờ bài viết đầu tiên trên timeline profile hiển thị
     const tweetFound = await page
-      .waitForSelector('article[data-testid="tweet"]', { timeout: 8000 })
+      .waitForSelector('article[data-testid="tweet"]', { timeout: 10000 })
       .then(() => true)
       .catch(() => false);
 
     if (!tweetFound) {
       console.log(
-        `   ⚠️ Không tìm thấy bài viết tweet nào xuất hiện trong DOM.`,
+        `   ⚠️ Không tìm thấy bài viết trên timeline của @${cleanHandle}`,
       );
+      return [];
     }
 
-    await sleep(1500);
+    // Chuyển mốc SINCE_DATE thành timestamp ms để so sánh ngày đăng
+    const sinceTimestamp = new Date(CURRENT_QUARTER_WINDOW.since).getTime();
 
+    let reachedOlderTweets = false;
     let emptyScrollCount = 0;
 
-    for (let scroll = 1; scroll <= MAX_SCROLLS_QUICK_SCAN; scroll++) {
-      const idsOnPage: string[] = await page.evaluate(() => {
+    for (let scroll = 1; scroll <= 10; scroll++) {
+      // Bóc tách tweetId và thời gian đăng từ DOM timeline
+      const tweetsOnPage = await page.evaluate(() => {
         const articles = Array.from(
           document.querySelectorAll('article[data-testid="tweet"]'),
         );
-        const ids: string[] = [];
+        const results: { id: string; datetime?: string; text: string }[] = [];
+
         articles.forEach((art) => {
           const link = art.querySelector('a[href*="/status/"]');
+          const timeEl = art.querySelector("time");
+          const textEl = art.querySelector('[data-testid="tweetText"]');
+
           if (link) {
             const href = link.getAttribute("href") || "";
             const match = href.match(/\/status\/(\d+)/);
-            if (match) ids.push(match[1]);
+            if (match) {
+              results.push({
+                id: match[1],
+                datetime: timeEl?.getAttribute("datetime") || undefined,
+                text: textEl?.textContent || "",
+              });
+            }
           }
         });
-        return ids;
+        return results;
       });
 
       const prevSize = discoveredIds.size;
-      idsOnPage.forEach((id) => discoveredIds.add(id));
-      const newlyFound = discoveredIds.size - prevSize;
 
+      for (const item of tweetsOnPage) {
+        // Kiểm tra thời gian đăng bài
+        if (item.datetime) {
+          const itemTime = new Date(item.datetime).getTime();
+          if (itemTime < sinceTimestamp) {
+            reachedOlderTweets = true;
+            continue;
+          }
+        }
+
+        // Lọc bài viết khớp với từ khóa của Translator
+        const textLower = item.text.toLowerCase();
+        const matchesKeyword =
+          !target.requireKeywordMatch ||
+          target.keywords.length === 0 ||
+          target.keywords.some((kw) => textLower.includes(kw.toLowerCase()));
+
+        if (matchesKeyword) {
+          discoveredIds.add(item.id);
+        }
+      }
+
+      // Đã cuộn tới các bài viết cũ hơn 3 ngày trước thì dừng cuộn
+      if (reachedOlderTweets) {
+        break;
+      }
+
+      const newlyFound = discoveredIds.size - prevSize;
       if (newlyFound === 0) {
         emptyScrollCount++;
-        if (emptyScrollCount >= 5) break;
+        if (emptyScrollCount >= 3) break;
       } else {
         emptyScrollCount = 0;
       }
 
-      await page.mouse.wheel(0, 1800);
-      await sleep(2000);
+      await page.mouse.wheel(0, 1500);
+      await sleep(1800);
     }
   } catch (err) {
-    console.error(
-      `   ⚠️ Failed loading search results for @${target.handle}:`,
-      err,
-    );
+    console.error(`   ⚠️ Failed loading timeline for @${cleanHandle}:`, err);
   } finally {
     await page.close();
   }
