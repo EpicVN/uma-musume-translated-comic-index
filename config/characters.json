@@ -884,6 +884,7 @@
             "orfe",
             "oru",
             "orfer",
+            "Tyrant",
             "オルフェ"
         ]
     },
@@ -957,6 +958,8 @@
         "jp": "デアリングタクト",
         "aliases": [
             "daring tact",
+            "Tact-chan",
+            "Tact",
             "デアタク"
         ]
     },
@@ -965,8 +968,8 @@
         "name": "Still in Love",
         "jp": "スティルインラブ",
         "aliases": [
-            "still",
             "still in love",
+            "SIL",
             "スティル"
         ]
     },
@@ -1524,6 +1527,7 @@
         "aliases": [
             "epiphaneia",
             "epiph",
+            "Epi",
             "エピファ"
         ]
     },

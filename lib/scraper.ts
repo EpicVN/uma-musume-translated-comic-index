@@ -9,6 +9,7 @@ export interface TweetData {
   quotedTweetId?: string;
   quotedTweetUrl?: string;
   hasMedia: boolean;
+  photos?: string[];
 }
 
 const EXCLUDED_LANG_KEYWORDS = [
@@ -25,13 +26,29 @@ const EXCLUDED_LANG_KEYWORDS = [
   // Japanese text specifically indicating Spanish
   "スペイン訳版",
   "スペイン訳",
+
+  // Indonesian keywords & phrases
+  "indonesian translation",
+  "indonesian trans",
+  "terjemahan indonesia",
+  "terjemahan bahasa",
+  "terjemahan",
+  "bahasa indonesia",
+  "bahasa",
+  "indonesia",
+  "indonesian",
+  "IDTL",
+  // Japanese text specifically indicating Indonesian
+  "インドネシア語翻訳",
+  "インドネシア語訳",
+  "インドネシア訳",
+  "インドネシア語",
+
   // Other non-English languages
   "tradução",
   "traducao",
   "português",
   "portugues",
-  "terjemahan",
-  "bahasa",
   "traduction",
 ];
 
@@ -61,35 +78,20 @@ export async function scrapeTweetMetadata(
 
     // CHỈ áp dụng bộ lọc ngôn ngữ cho bài dịch
     if (isTranslationPost) {
-      // 1. ƯU TIÊN SỐ 1: Bắt buộc kiểm tra Blacklist trước
-      // Hễ dính bất kỳ từ khóa tiếng Tây Ban Nha nào là LOẠI NGAY LẬP TỨC
+      // 1. Kiểm tra từ khóa Blacklist (Tây Ban Nha, Indo, Bồ Đào Nha,...)
       const isBlacklisted = EXCLUDED_LANG_KEYWORDS.some((kw) =>
         tweetText.includes(kw.toLowerCase()),
       );
 
       if (isBlacklisted) {
-        console.log(
-          `🚫 [Chặn Blacklist] Tweet ${tweetId} chứa từ khóa tiếng Tây Ban Nha / Non-EN`,
-        );
+        console.log(`🚫 [Chặn Blacklist] Tweet ${tweetId} chứa từ khóa Non-EN`);
         return null;
       }
 
-      // 2. Chặn nếu Twitter nhận diện dứt khoát là tiếng Tây Ban Nha ('es')
-      if (data.lang === "es") {
-        console.log(`🚫 [Chặn Twitter Lang] Tweet ${tweetId} có lang = 'es'`);
-        return null;
-      }
-
-      // 3. Đảm bảo nội dung là tiếng Anh (hoặc không xác định rõ 'und', hoặc có nhãn tiếng Anh)
-      const isEnglish =
-        data.lang === "en" ||
-        data.lang === "und" ||
-        tweetText.includes("english translation") ||
-        tweetText.includes("ウマ娘英訳");
-
-      if (!isEnglish) {
+      // 2. Chặn nếu Twitter nhận diện dứt khoát là tiếng Tây Ban Nha ('es') hoặc tiếng Indo ('id')
+      if (data.lang === "es" || data.lang === "id") {
         console.log(
-          `🚫 [Bỏ qua Non-EN] Tweet ${tweetId} không phải tiếng Anh (lang: ${data.lang})`,
+          `🚫 [Chặn Twitter Lang] Tweet ${tweetId} có lang = '${data.lang}'`,
         );
         return null;
       }
@@ -106,11 +108,25 @@ export async function scrapeTweetMetadata(
         : `https://x.com/i/status/${quotedTweetId}`;
     }
 
-    // Kiểm tra media đính kèm
-    const hasMedia = Boolean(
-      (data.mediaDetails && data.mediaDetails.length > 0) ||
-      (data.photos && data.photos.length > 0),
-    );
+    // Trích xuất link ảnh gốc độ phân giải cao
+    const photos: string[] = [];
+    if (data.photos && Array.isArray(data.photos)) {
+      data.photos.forEach((p: { url?: string }) => {
+        if (p.url) {
+          const orig = p.url.replace(/name=[a-zA-Z0-9]+/, "name=orig");
+          if (!photos.includes(orig)) photos.push(orig);
+        }
+      });
+    } else if (data.mediaDetails && Array.isArray(data.mediaDetails)) {
+      data.mediaDetails.forEach((m: { media_url_https?: string }) => {
+        if (m.media_url_https) {
+          const orig = `${m.media_url_https}?name=orig`;
+          if (!photos.includes(orig)) photos.push(orig);
+        }
+      });
+    }
+
+    const hasMedia = photos.length > 0;
 
     return {
       tweetId,
@@ -123,6 +139,7 @@ export async function scrapeTweetMetadata(
       quotedTweetId,
       quotedTweetUrl,
       hasMedia,
+      photos,
     };
   } catch (error) {
     console.error(`Lỗi bóc tách metadata tweet ${tweetId}:`, error);

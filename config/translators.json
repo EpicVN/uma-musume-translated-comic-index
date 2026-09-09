@@ -88,5 +88,215 @@
             "ウマ娘英訳"
         ],
         "requireKeywordMatch": true
+    },
+    {
+        "name": "MCooFay",
+        "handle": "BlackCafe123",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "AnonimaxTL",
+        "handle": "Anonimax_True",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "Jhonoi",
+        "handle": "JhonHearerer",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "LafarlCT",
+        "handle": "LafarlCT",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "日本ビラボン",
+        "handle": "JapanBillabong",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "SAKADAEX",
+        "handle": "a_ben19",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "Kuruma",
+        "handle": "Ridzeeen12",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "シューちゃん",
+        "handle": "ShuuChan_Twit",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "Paracite",
+        "handle": "TheParacite",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "MacandCheese6",
+        "handle": "Cheese6Mac",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "Espy",
+        "handle": "EspokunCity",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "UMAX",
+        "handle": "cafe_firstto",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "umachan",
+        "handle": "umamuchan",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "umatranslations",
+        "handle": "umatranslations",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "RagingAsn",
+        "handle": "RagingAsn_",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "D Tier Translator (JP to EN)",
+        "handle": "DTierTL",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "iuui",
+        "handle": "YITBB8307",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "Weed",
+        "handle": "Weed077BA",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "H-pan",
+        "handle": "obor_obor",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "Duoblue",
+        "handle": "duoblues2",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "Gigel Transilvanesti",
+        "handle": "Euadi2",
+        "language": "en",
+        "keywords": [
+            "#Umamusume",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
     }
 ]

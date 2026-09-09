@@ -49,6 +49,7 @@ model OriginalPost {
   content    String?  @db.Text
   postedAt   DateTime
   mediaCount Int      @default(1)
+  mediaUrls  String[] @default([]) // Lưu link ảnh trực tiếp từ pbs.twimg.com
 
   artistId String
   artist   Creator @relation("ArtistPosts", fields: [artistId], references: [id], onDelete: Cascade)
@@ -65,7 +66,7 @@ model OriginalPost {
 
   @@index([artistId])
   @@index([postedAt(sort: Desc)])
-  @@index([artistId, postedAt(sort: Desc)]) // Tối ưu khi lọc theo Artist + sort ngày gốc
+  @@index([artistId, postedAt(sort: Desc)])
   @@index([seriesId])
 }
 
@@ -73,12 +74,13 @@ model OriginalPost {
 // 3. Translated Post
 // -------------------------------------------------------------
 model TranslatedPost {
-  id       String   @id @default(cuid())
-  tweetId  String   @unique
-  tweetUrl String
-  language String   @default("en") // en, vi, etc.
-  content  String?  @db.Text
-  postedAt DateTime
+  id        String   @id @default(cuid())
+  tweetId   String   @unique
+  tweetUrl  String
+  language  String   @default("en")
+  content   String?  @db.Text
+  mediaUrls String[] @default([]) // Lưu link ảnh dịch trực tiếp từ pbs.twimg.com
+  postedAt  DateTime
 
   translatorId String
   translator   Creator @relation("TranslatorPosts", fields: [translatorId], references: [id], onDelete: Cascade)
@@ -95,7 +97,7 @@ model TranslatedPost {
   @@index([translatorId])
   @@index([originalPostId])
   @@index([postedAt(sort: Desc)])
-  @@index([translatorId, postedAt(sort: Desc)]) // Tối ưu khi lọc theo Translator + sort ngày TL
+  @@index([translatorId, postedAt(sort: Desc)])
 }
 
 // -------------------------------------------------------------
@@ -124,7 +126,7 @@ model Tag {
   @@index([jpName])
 }
 
-// For many-to-many relationship between OriginalPost and Tag
+// Quan hệ n-n giữa OriginalPost và Tag
 model PostTag {
   postId   String
   tagId    String

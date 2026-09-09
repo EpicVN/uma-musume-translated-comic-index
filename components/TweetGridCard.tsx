@@ -19,6 +19,8 @@ interface TweetGridCardProps {
   tags?: TagItem[];
   postedAt?: Date | string;
   priority?: boolean;
+  origMediaUrls?: string[];
+  transMediaUrls?: string[];
 }
 
 function formatHandle(handle: string) {
@@ -35,13 +37,15 @@ export default function TweetGridCard({
   tags = [],
   postedAt,
   priority = false,
+  origMediaUrls = [],
+  transMediaUrls = [],
 }: TweetGridCardProps) {
   const [isOpenModal, setIsOpenModal] = useState(false);
 
-  // Fetch the translated tweet data using the transId
+  // Fetch tweet data dynamically as fallback
   const { data: tweet, isLoading } = useTweet(transId);
 
-  // Handle Escape key to close modal and prevent background scrolling when modal is open
+  // Modal scroll lock and ESC key close
   useEffect(() => {
     if (!isOpenModal) return;
 
@@ -69,11 +73,22 @@ export default function TweetGridCard({
       })
     : null;
 
-  // Get the first photo URL from the tweet's mediaDetails if available
-  const firstPhotoUrl =
-    tweet?.mediaDetails && tweet.mediaDetails.length > 0
-      ? tweet.mediaDetails[0].media_url_https
-      : null;
+  // Prioritize direct mediaUrls from database, fallback to react-tweet mediaDetails
+  const displayThumbnail =
+    transMediaUrls.length > 0
+      ? transMediaUrls[0]
+      : origMediaUrls.length > 0
+        ? origMediaUrls[0]
+        : tweet?.mediaDetails && tweet.mediaDetails.length > 0
+          ? tweet.mediaDetails[0].media_url_https
+          : null;
+
+  const totalPages =
+    transMediaUrls.length > 0
+      ? transMediaUrls.length
+      : origMediaUrls.length > 0
+        ? origMediaUrls.length
+        : tweet?.mediaDetails?.length || 0;
 
   return (
     <>
@@ -118,19 +133,14 @@ export default function TweetGridCard({
           )}
         </div>
 
-        {/* Manga Preview - Cố định aspect-[3/4] chống nhảy layout */}
+        {/* Manga Preview Thumbnail */}
         <div
           className="relative w-full aspect-3/4 my-2 overflow-hidden rounded-lg bg-[#0b1622] cursor-pointer group flex items-center justify-center border border-[#1e2d42]/40 shrink-0"
           onClick={() => setIsOpenModal(true)}
         >
-          {isLoading ? (
-            <div className="flex flex-col items-center gap-2 text-zinc-500">
-              <div className="w-5 h-5 border-2 border-[#3db4f2] border-t-transparent rounded-full animate-spin" />
-              <span className="text-[11px]">Loading art...</span>
-            </div>
-          ) : firstPhotoUrl ? (
+          {displayThumbnail ? (
             <Image
-              src={firstPhotoUrl}
+              src={displayThumbnail}
               alt={`Comic Preview by ${artistName}`}
               fill
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
@@ -139,6 +149,11 @@ export default function TweetGridCard({
               referrerPolicy="no-referrer"
               className="object-cover object-top group-hover:scale-105 transition-transform duration-300"
             />
+          ) : isLoading ? (
+            <div className="flex flex-col items-center gap-2 text-zinc-500">
+              <div className="w-5 h-5 border-2 border-[#3db4f2] border-t-transparent rounded-full animate-spin" />
+              <span className="text-[11px]">Loading art...</span>
+            </div>
           ) : (
             <div className="text-zinc-500 text-xs px-3 text-center">
               No image preview available
@@ -146,9 +161,9 @@ export default function TweetGridCard({
           )}
 
           {/* Page Badge */}
-          {tweet?.mediaDetails && tweet.mediaDetails.length > 1 && (
+          {totalPages > 1 && (
             <span className="absolute top-2 right-2 bg-black/75 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/10 z-10">
-              1/{tweet.mediaDetails.length} P
+              1/{totalPages} P
             </span>
           )}
 
@@ -216,7 +231,6 @@ export default function TweetGridCard({
                   Uma Musume Translation
                 </span>
 
-                {/* Artist & Translator Badge */}
                 <div className="inline-flex items-center gap-1.5 bg-[#0b1622] px-2.5 py-1 rounded-md border border-[#27364b] text-xs shrink-0">
                   <span
                     className="text-[#8ba0b2] font-medium truncate max-w-35 sm:max-w-50"
@@ -230,7 +244,6 @@ export default function TweetGridCard({
                   </span>
                 </div>
 
-                {/* Full Tags List inside Modal */}
                 {tags.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5">
                     {tags.map((t) => (
@@ -245,7 +258,6 @@ export default function TweetGridCard({
                 )}
               </div>
 
-              {/* Close Button */}
               <button
                 type="button"
                 onClick={() => setIsOpenModal(false)}
@@ -259,8 +271,8 @@ export default function TweetGridCard({
             {/* Modal Content */}
             <div className="overflow-y-auto p-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                {/* Raw Tweet */}
-                <div className="flex flex-col items-center">
+                {/* Raw Tweet Column */}
+                <div className="flex flex-col items-center w-full">
                   <div className="w-full flex justify-between items-center mb-2 px-1 text-xs">
                     <span className="font-bold text-[#f43f5e] uppercase tracking-wide">
                       Original Raw
@@ -274,16 +286,40 @@ export default function TweetGridCard({
                       Open on X ↗
                     </a>
                   </div>
-                  <div
-                    className="w-full max-w-105 [data-theme='dark'] [&_.react-tweet-theme]:bg-[#0b1622]! [&_.react-tweet-theme]:border-[#1e2d42]! [&_.react-tweet-theme]:rounded-lg!"
-                    data-theme="dark"
-                  >
-                    <Tweet id={origId} />
-                  </div>
+
+                  {origMediaUrls.length > 0 ? (
+                    <div className="flex flex-col gap-3 w-full max-w-105">
+                      {origMediaUrls.map((url, idx) => (
+                        <div
+                          key={idx}
+                          className="relative w-full rounded-xl overflow-hidden border border-[#1e2d42] bg-[#0b1622] shadow-sm"
+                        >
+                          <Image
+                            src={url}
+                            alt={`Original art page ${idx + 1}`}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-auto object-contain block"
+                            width={0}
+                            height={0}
+                            sizes="(max-width: 768px) 100vw, 420px"
+                            style={{ width: "100%", height: "auto" }}
+                            loading="lazy"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div
+                      className="w-full max-w-105 [data-theme='dark'] [&_.react-tweet-theme]:bg-[#0b1622]! [&_.react-tweet-theme]:border-[#1e2d42]! [&_.react-tweet-theme]:rounded-lg!"
+                      data-theme="dark"
+                    >
+                      <Tweet id={origId} />
+                    </div>
+                  )}
                 </div>
 
-                {/* Translated Tweet */}
-                <div className="flex flex-col items-center">
+                {/* Translated Tweet Column */}
+                <div className="flex flex-col items-center w-full">
                   <div className="w-full flex justify-between items-center mb-2 px-1 text-xs">
                     <span className="font-bold text-[#10b981] uppercase tracking-wide">
                       Translated ({language.toUpperCase()})
@@ -297,12 +333,36 @@ export default function TweetGridCard({
                       Open on X ↗
                     </a>
                   </div>
-                  <div
-                    className="w-full max-w-105 [data-theme='dark'] [&_.react-tweet-theme]:bg-[#0b1622]! [&_.react-tweet-theme]:border-[#1e2d42]! [&_.react-tweet-theme]:rounded-lg! [&_.react-tweet-theme_.react-tweet-quoted-tweet]:hidden!"
-                    data-theme="dark"
-                  >
-                    <Tweet id={transId} />
-                  </div>
+
+                  {transMediaUrls.length > 0 ? (
+                    <div className="flex flex-col gap-3 w-full max-w-105">
+                      {transMediaUrls.map((url, idx) => (
+                        <div
+                          key={idx}
+                          className="relative w-full rounded-xl overflow-hidden border border-[#1e2d42] bg-[#0b1622] shadow-sm"
+                        >
+                          <Image
+                            src={url}
+                            alt={`Translated page ${idx + 1}`}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-auto object-contain block"
+                            width={0}
+                            height={0}
+                            sizes="(max-width: 768px) 100vw, 420px"
+                            style={{ width: "100%", height: "auto" }}
+                            loading="lazy"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div
+                      className="w-full max-w-105 [data-theme='dark'] [&_.react-tweet-theme]:bg-[#0b1622]! [&_.react-tweet-theme]:border-[#1e2d42]! [&_.react-tweet-theme]:rounded-lg! [&_.react-tweet-theme_.react-tweet-quoted-tweet]:hidden!"
+                      data-theme="dark"
+                    >
+                      <Tweet id={transId} />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

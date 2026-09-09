@@ -45,7 +45,8 @@ const searchCubariFiles = (query: string) => {
 
 const getCachedPosts = (filter: FilterQuery) => {
   const cleanQuery = filter.q?.trim() || "";
-  const cacheKey = `posts-${filter.page}-${cleanQuery}-${filter.tag}-${filter.artist}-${filter.translator}-${filter.sort}`;
+  // Đổi tiền tố cache sang v2 để làm mới cache cũ chưa có mediaUrls
+  const cacheKey = `posts-v2-${filter.page}-${cleanQuery}-${filter.tag}-${filter.artist}-${filter.translator}-${filter.sort}`;
 
   return unstable_cache(
     async () => {
@@ -166,6 +167,7 @@ export default async function ComicFeed({
       </div>
     );
   }
+
   if (modeOption === "cubari") {
     return (
       <>
@@ -197,6 +199,8 @@ export default async function ComicFeed({
               tags={post.originalPost.tags.map((pt) => pt.tag)}
               postedAt={post.postedAt}
               priority={index < 4}
+              origMediaUrls={post.originalPost.mediaUrls}
+              transMediaUrls={post.mediaUrls}
             />
           ))}
         </div>
