@@ -24,15 +24,17 @@ interface ExtendedTweetData extends TweetData {
 
 const TARGET_TRANSLATORS: TranslatorTarget[] = translatorsData;
 
-// Dynamic daily scan window: from 3 days ago to today
+// SỬA ĐIỂM 1: Sliding window chuẩn xác (until tính sang ngày mai để lấy trọn vẹn hôm nay)
 const now = new Date();
-const TODAY = now.toISOString().split("T")[0];
+const tomorrow = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
+const UNTIL_DATE = tomorrow.toISOString().split("T")[0];
+
 const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
 const SINCE_DATE = threeDaysAgo.toISOString().split("T")[0];
 
 const CURRENT_QUARTER_WINDOW = {
   since: SINCE_DATE,
-  until: TODAY,
+  until: UNTIL_DATE,
 };
 
 const EXCLUDED_LANG_KEYWORDS = [
@@ -467,25 +469,39 @@ async function discoverLatestTweetIds(
       timeout: 35000,
     });
 
-    // Chờ bài viết đầu tiên xuất hiện để đảm bảo timeline đã render
-    await page
-      .waitForSelector('article[data-testid="tweet"]', { timeout: 10000 })
-      .catch(() => {});
-    await sleep(3500);
-
-    const retryBtn = page
-      .locator(
-        'button:has-text("Retry"), div[role="button"]:has-text("Retry")',
-      )
-      .first();
-
-    if (await retryBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await retryBtn.click();
-      await sleep(3000);
-      await page
-        .waitForSelector('article[data-testid="tweet"]', { timeout: 8000 })
-        .catch(() => {});
+    // SỬA ĐIỂM 2: Debug redirect xem có bị đẩy về login hay checkpoint không
+    const currentUrl = page.url();
+    if (currentUrl.includes("/login") || currentUrl.includes("/i/flow/login")) {
+      console.error(
+        `   ❌ [Auth Error] Bị chuyển hướng về trang đăng nhập! Kiểm tra lại token cookie.`,
+      );
     }
+
+    // Đợi render tweet selector với timeout 10 giây
+    const tweetFound = await page
+      .waitForSelector('article[data-testid="tweet"]', { timeout: 10000 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!tweetFound) {
+      // Xử lý nút Retry nếu data center bị chập chờn
+      const retryBtn = page
+        .locator(
+          'button:has-text("Retry"), div[role="button"]:has-text("Retry")',
+        )
+        .first();
+
+      if (await retryBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+        console.log("   🔄 Phát hiện nút Retry, đang bấm lại...");
+        await retryBtn.click();
+        await sleep(3000);
+        await page
+          .waitForSelector('article[data-testid="tweet"]', { timeout: 8000 })
+          .catch(() => {});
+      }
+    }
+
+    await sleep(2500);
 
     let emptyScrollCount = 0;
 
@@ -561,7 +577,6 @@ async function processTranslatorLatest(
   const tweetIdList = await discoverLatestTweetIds(context, target);
   console.log(`   👉 Discovered ${tweetIdList.length} tweet IDs in window.`);
 
-  // 1. Batch Check DB 1 lần duy nhất
   const existingRecords = await prisma.translatedPost.findMany({
     where: {
       tweetId: { in: tweetIdList },
@@ -581,7 +596,6 @@ async function processTranslatorLatest(
   for (let idx = 0; idx < tweetIdList.length; idx++) {
     const tId = tweetIdList[idx];
 
-    // 2. Kiểm tra bộ nhớ tạm và skip ngay lập tức
     if (existingTweetIds.has(tId)) {
       console.log(
         `   ⏭️ [${idx + 1}/${tweetIdList.length}] ID ${tId} already exists in DB, skipping...`,
@@ -597,9 +611,6 @@ async function processTranslatorLatest(
       false,
     );
 
-    // ========================================================================
-    // BƯỚC 1: KIỂM TRA TỪ KHÓA CẤM
-    // ========================================================================
     if (transData) {
       if (
         isExcludedLanguage(transData.text || "") ||
@@ -619,9 +630,6 @@ async function processTranslatorLatest(
       }
     }
 
-    // ========================================================================
-    // BƯỚC 2: MỞ BROWSER NẾU DÍNH CỜ 18+ (KHÔNG LẤY ĐƯỢC DỮ LIỆU / THIẾU ẢNH)
-    // ========================================================================
     if (!transData || !transData.photos?.length) {
       console.log(
         `   🔞 [NSFW Detected] ID ${tId}: Unlocking content via browser...`,
@@ -647,9 +655,6 @@ async function processTranslatorLatest(
       continue;
     }
 
-    // ========================================================================
-    // BƯỚC 3: TÌM BÀI VIẾT GỐC CỦA ARTIST
-    // ========================================================================
     let originalTweetUrl: string | undefined = transData.quotedTweetUrl;
 
     if (!originalTweetUrl) {
@@ -679,9 +684,6 @@ async function processTranslatorLatest(
       continue;
     }
 
-    // ========================================================================
-    // BƯỚC 4: BÓC TÁCH BÀI GỐC CỦA ARTIST
-    // ========================================================================
     let origData: ExtendedTweetData | null = await scrapeTweetMetadata(
       originalTweetUrl,
       false,
@@ -768,12 +770,26 @@ async function processTranslatorLatest(
 }
 
 async function runQuickUpdate() {
+  console.log("🔍 Environment Check:");
+  console.log(
+    " - DATABASE_URL:",
+    process.env.DATABASE_URL ? "Loaded" : "MISSING",
+  );
+  console.log(
+    " - TWITTER_AUTH_TOKEN:",
+    process.env.TWITTER_AUTH_TOKEN ? "Loaded" : "MISSING",
+  );
+  console.log(
+    " - TWITTER_CT0:",
+    process.env.TWITTER_CT0 ? "Loaded" : "MISSING",
+  );
+
   const browser = await chromium.launch({
-    headless: false,
+    headless: true,
     args: [
-      "--disable-blink-features=AutomationControlled",
       "--no-sandbox",
       "--disable-setuid-sandbox",
+      "--disable-blink-features=AutomationControlled",
     ],
   });
 
@@ -789,7 +805,6 @@ async function runQuickUpdate() {
     });
   });
 
-  // Chặn font, tracking, video stream nhưng GIỮ LẠI toàn bộ ảnh pbs.twimg.com
   await context.route("**/*", (route) => {
     const resourceType = route.request().resourceType();
     const url = route.request().url();
@@ -806,26 +821,30 @@ async function runQuickUpdate() {
     return route.continue();
   });
 
+  // SỬA ĐIỂM 3: Nạp Cookie cho cả 2 domain .x.com và .twitter.com
   if (process.env.TWITTER_AUTH_TOKEN && process.env.TWITTER_CT0) {
-    await context.addCookies([
-      {
-        name: "auth_token",
-        value: process.env.TWITTER_AUTH_TOKEN,
-        domain: ".x.com",
-        path: "/",
-        httpOnly: true,
-        secure: true,
-        sameSite: "None",
-      },
-      {
-        name: "ct0",
-        value: process.env.TWITTER_CT0,
-        domain: ".x.com",
-        path: "/",
-        secure: true,
-        sameSite: "Lax",
-      },
-    ]);
+    const domains = [".x.com", ".twitter.com"];
+    for (const domain of domains) {
+      await context.addCookies([
+        {
+          name: "auth_token",
+          value: process.env.TWITTER_AUTH_TOKEN,
+          domain: domain,
+          path: "/",
+          httpOnly: true,
+          secure: true,
+          sameSite: "None",
+        },
+        {
+          name: "ct0",
+          value: process.env.TWITTER_CT0,
+          domain: domain,
+          path: "/",
+          secure: true,
+          sameSite: "Lax",
+        },
+      ]);
+    }
   }
 
   console.log(
@@ -843,5 +862,8 @@ async function runQuickUpdate() {
 }
 
 runQuickUpdate()
-  .catch((err) => console.error("Update failed:", err))
+  .catch((err) => {
+    console.error("Update failed:", err);
+    process.exit(1);
+  })
   .finally(async () => await prisma.$disconnect());
