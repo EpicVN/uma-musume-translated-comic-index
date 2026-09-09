@@ -1,10 +1,7 @@
-name: Run Auto Tag Update
+name: Run Auto Update Tweet
 
 on:
-  # Cho phép bấm nút trigger thủ công trên giao diện GitHub
   workflow_dispatch:
-
-  # Chạy tự động theo lịch (Ví dụ: chạy mỗi 6 tiếng một lần theo giờ UTC)
   schedule:
     - cron: "0 */6 * * *"
 
@@ -25,14 +22,21 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # 1. Cài đặt binary Chromium và toàn bộ thư viện hệ thống Linux liên quan
+      - name: Install Playwright Chromium and OS Dependencies
+        run: npx playwright install chromium --with-deps
+
       - name: Generate Prisma Client
         run: npx prisma generate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
 
+      # 2. Dùng xvfb-run để giả lập màn hình ảo (nếu script vẫn để headless: false)
       - name: Run update script
-        run: npx tsx scripts/update-latest.ts
+        run: xvfb-run npx tsx scripts/update-latest.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          TWITTER_AUTH_TOKEN: ${{ secrets.TWITTER_AUTH_TOKEN }}
+          TWITTER_CT0: ${{ secrets.TWITTER_CT0 }}
