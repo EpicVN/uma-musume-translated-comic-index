@@ -1,14 +1,13 @@
-name: Run Auto Update Tweet
+name: Auto Update Tweets
 
 on:
-  workflow_dispatch:
   schedule:
     - cron: "0 */6 * * *"
+  workflow_dispatch:
 
 jobs:
   update-tags:
-    runs-on: ubuntu-latest
-
+    runs-on: self-hosted # Chuyển sang chạy trên máy của bạn
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -22,9 +21,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # 1. Cài đặt binary Chromium và toàn bộ thư viện hệ thống Linux liên quan
-      - name: Install Playwright Chromium and OS Dependencies
-        run: npx playwright install chromium --with-deps
+      # Cài đặt Playwright browser cho Windows
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
 
       - name: Generate Prisma Client
         run: npx prisma generate
@@ -32,9 +31,9 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
 
-      # 2. Dùng xvfb-run để giả lập màn hình ảo (nếu script vẫn để headless: false)
+      # Bỏ xvfb-run vì Windows đã có sẵn giao diện đồ họa
       - name: Run update script
-        run: xvfb-run npx tsx scripts/update-latest.ts
+        run: npx tsx scripts/update-latest.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
