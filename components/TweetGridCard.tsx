@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { Tweet, useTweet } from "react-tweet";
+import BookmarkButton from "@/components/BookmarkButton";
+import { useReadingTracker } from "@/hooks/useReadingTracker";
 
 interface TagItem {
   id: string;
@@ -41,6 +43,7 @@ export default function TweetGridCard({
   transMediaUrls = [],
 }: TweetGridCardProps) {
   const [isOpenModal, setIsOpenModal] = useState(false);
+  const { recordProgress } = useReadingTracker();
 
   // Fetch tweet data dynamically as fallback
   const { data: tweet, isLoading } = useTweet(transId);
@@ -90,6 +93,20 @@ export default function TweetGridCard({
         ? origMediaUrls.length
         : tweet?.mediaDetails?.length || 0;
 
+  // Track comic progress when user opens the reader modal
+  const handleOpenReader = () => {
+    setIsOpenModal(true);
+    recordProgress({
+      tweetId: transId,
+      title: `${artistName} (TL by ${formatHandle(translatorName)})`,
+      coverImage: displayThumbnail || undefined,
+      artistName,
+      translatorHandle: translatorName,
+      lastReadPageIndex: 0,
+      totalPages: totalPages > 0 ? totalPages : 1,
+    });
+  };
+
   return (
     <>
       {/* 1. Manga Preview Card */}
@@ -136,7 +153,7 @@ export default function TweetGridCard({
         {/* Manga Preview Thumbnail */}
         <div
           className="relative w-full aspect-3/4 my-2 overflow-hidden rounded-lg bg-[#0b1622] cursor-pointer group flex items-center justify-center border border-[#1e2d42]/40 shrink-0"
-          onClick={() => setIsOpenModal(true)}
+          onClick={handleOpenReader}
         >
           {displayThumbnail ? (
             <Image
@@ -189,16 +206,20 @@ export default function TweetGridCard({
 
           <div className="flex justify-between items-center text-[11px]">
             <span className="text-[#8ba0b2]">Translator:</span>
-            <span className="text-[#3db4f2] font-semibold truncate max-w-30">
+            <span
+              className="text-[#3db4f2] font-semibold truncate max-w-30"
+              title={formatHandle(translatorName)}
+            >
               {formatHandle(translatorName)}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-1">
+          {/* Action Buttons Row */}
+          <div className="flex items-center gap-2 pt-1">
             <button
               type="button"
-              onClick={() => setIsOpenModal(true)}
-              className="w-full py-1.5 rounded bg-[#22334a] hover:bg-[#3db4f2] text-zinc-200 hover:text-white text-[11px] font-bold transition-all duration-150 border border-[#2d4260] hover:border-[#3db4f2] shadow-sm active:scale-95 cursor-pointer"
+              onClick={handleOpenReader}
+              className="flex-1 py-1.5 rounded bg-[#22334a] hover:bg-[#3db4f2] text-zinc-200 hover:text-white text-[11px] font-bold transition-all duration-150 border border-[#2d4260] hover:border-[#3db4f2] shadow-sm active:scale-95 cursor-pointer"
             >
               Read
             </button>
@@ -206,10 +227,19 @@ export default function TweetGridCard({
               href={`https://x.com/i/status/${transId}`}
               target="_blank"
               rel="noreferrer"
-              className="w-full text-center py-1.5 rounded bg-[#0b1622] hover:bg-[#1a2638] text-[#8ba0b2] hover:text-[#3db4f2] text-[11px] font-bold transition-all duration-150 border border-[#27364b] hover:border-[#3db4f2]/60 active:scale-95 cursor-pointer"
+              className="flex-1 text-center py-1.5 rounded bg-[#0b1622] hover:bg-[#1a2638] text-[#8ba0b2] hover:text-[#3db4f2] text-[11px] font-bold transition-all duration-150 border border-[#27364b] hover:border-[#3db4f2]/60 active:scale-95 cursor-pointer"
             >
               View on X ↗
             </a>
+            <BookmarkButton
+              item={{
+                tweetId: transId,
+                title: `${artistName} (TL by ${formatHandle(translatorName)})`,
+                coverImage: displayThumbnail || undefined,
+                artistName,
+                translatorHandle: translatorName,
+              }}
+            />
           </div>
         </div>
       </div>
@@ -257,15 +287,6 @@ export default function TweetGridCard({
                   </div>
                 )}
               </div>
-
-              <button
-                type="button"
-                onClick={() => setIsOpenModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#0b1622] text-[#8ba0b2] hover:text-white hover:bg-rose-600 border border-[#27364b] hover:border-rose-500 transition-colors duration-150 cursor-pointer text-xs font-bold shrink-0 ml-2"
-                title="Close (Esc)"
-              >
-                ✕
-              </button>
             </div>
 
             {/* Modal Content */}
