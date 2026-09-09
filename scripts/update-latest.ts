@@ -1,8 +1,13 @@
 import { PrismaClient } from "@prisma/client";
 import { scrapeTweetMetadata, TweetData } from "../lib/scraper";
 import { autoTagPost } from "../lib/tagger";
-import { chromium, BrowserContext, Page, Response } from "playwright";
+import { BrowserContext, Page, Response } from "playwright";
 import * as dotenv from "dotenv";
+
+import { chromium } from "playwright-extra";
+import stealthPlugin from "puppeteer-extra-plugin-stealth";
+
+chromium.use(stealthPlugin());
 
 import translatorsData from "../config/translators.json";
 
@@ -821,6 +826,7 @@ async function runQuickUpdate() {
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
       "--disable-blink-features=AutomationControlled",
     ],
   });
@@ -828,7 +834,9 @@ async function runQuickUpdate() {
   const context = await browser.newContext({
     userAgent:
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    viewport: { width: 1280, height: 800 },
+    viewport: { width: 1366, height: 768 },
+    locale: "en-US",
+    timezoneId: "Asia/Ho_Chi_Minh",
   });
 
   await context.addInitScript(() => {
