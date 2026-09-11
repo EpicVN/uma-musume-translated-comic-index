@@ -12,20 +12,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Tận dụng Node.js sẵn có trên máy hoặc setup nhanh không cần cache thừa
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # Chỉ chạy install nếu chưa có node_modules (tiết kiệm thời gian quét)
       - name: Install dependencies (if needed)
         run: |
           if (-not (Test-Path "node_modules")) {
             npm install
           }
 
-      # Chromium đã có sẵn trên máy từ lần chạy đầu tiên, chỉ cần đảm bảo có Prisma Client
       - name: Generate Prisma Client
         run: npx prisma generate
         env:
@@ -39,3 +36,4 @@ jobs:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
           TWITTER_AUTH_TOKEN: ${{ secrets.TWITTER_AUTH_TOKEN }}
           TWITTER_CT0: ${{ secrets.TWITTER_CT0 }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
