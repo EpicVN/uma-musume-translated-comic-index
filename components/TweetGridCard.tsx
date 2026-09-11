@@ -60,6 +60,11 @@ export default function TweetGridCard({
 
   return (
     <div className="flex flex-col bg-[#151f2e] rounded-xl overflow-hidden border border-[#1e2d42] hover:border-[#3db4f2]/70 transition-all duration-200 shadow-md hover:shadow-lg hover:shadow-[#3db4f2]/10 p-3">
+      {/* Nạp ngầm trước ảnh gốc đầu tiên vào cache trình duyệt để mở modal load ngay */}
+      {origMediaUrls.length > 0 && (
+        <link rel="prefetch" href={origMediaUrls[0]} as="image" />
+      )}
+
       {/* Header Tag & Date */}
       <div className="flex items-center justify-between gap-1 text-[10px] pb-2 border-b border-[#1e2d42]/60 shrink-0 h-7">
         <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">

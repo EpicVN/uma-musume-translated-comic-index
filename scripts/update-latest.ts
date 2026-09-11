@@ -29,7 +29,7 @@ interface ExtendedTweetData extends TweetData {
 
 const TARGET_TRANSLATORS: TranslatorTarget[] = translatorsData;
 
-// SỬA ĐIỂM 1: Sliding window chuẩn xác (until tính sang ngày mai để lấy trọn vẹn hôm nay)
+// Calculate sliding window: from 3 days ago until tomorrow (current + 1 day)
 const now = new Date();
 const tomorrow = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
 const UNTIL_DATE = tomorrow.toISOString().split("T")[0];
@@ -74,7 +74,6 @@ const EXCLUDED_LANG_KEYWORDS = [
   "traduction",
 ];
 
-const MAX_SCROLLS_QUICK_SCAN = 25;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function parseValidDate(dateStr?: string, tweetId?: string): Date {
@@ -458,15 +457,31 @@ async function discoverLatestTweetIds(
   const page = await context.newPage();
   const discoveredIds = new Set<string>();
   const cleanHandle = target.handle.replace(/^@/, "");
-  const profileUrl = `https://x.com/${cleanHandle}`;
+
+  // Build keyword filter query for X search
+  let keywordQuery = "";
+  if (
+    target.requireKeywordMatch &&
+    target.keywords &&
+    target.keywords.length > 0
+  ) {
+    const formattedKeywords = target.keywords
+      .map((k) => (k.includes(" ") ? `"${k}"` : k))
+      .join(" OR ");
+    keywordQuery = ` (${formattedKeywords})`;
+  }
+
+  // Construct Search Query: from:<handle> since:<YYYY-MM-DD> until:<YYYY-MM-DD>
+  const query = `(from:${cleanHandle})${keywordQuery} since:${CURRENT_QUARTER_WINDOW.since} until:${CURRENT_QUARTER_WINDOW.until}`;
+  const searchUrl = `https://x.com/search?q=${encodeURIComponent(query)}&f=live`;
 
   console.log(
-    `\n📅 [@${cleanHandle}] Scanning profile window: [${CURRENT_QUARTER_WINDOW.since} -> ${CURRENT_QUARTER_WINDOW.until}]`,
+    `\n📅 [@${cleanHandle}] Timeline search window: [${CURRENT_QUARTER_WINDOW.since} -> ${CURRENT_QUARTER_WINDOW.until}]`,
   );
-  console.log(`   🌐 Đang mở profile: ${profileUrl}`);
+  console.log(`   🌐 Search Query URL: ${searchUrl}`);
 
   try {
-    await page.goto(profileUrl, {
+    await page.goto(searchUrl, {
       waitUntil: "domcontentloaded",
       timeout: 35000,
     });
@@ -475,10 +490,10 @@ async function discoverLatestTweetIds(
 
     const actualUrl = page.url();
     const actualTitle = await page.title();
-    console.log(`   📍 URL thực tế: ${actualUrl}`);
-    console.log(`   📑 Tiêu đề trang: "${actualTitle}"`);
+    console.log(`   📍 Destination URL: ${actualUrl}`);
+    console.log(`   📑 Page Title: "${actualTitle}"`);
 
-    // Chờ bài viết đầu tiên trên timeline profile hiển thị
+    // Check if timeline search returned any tweets
     const tweetFound = await page
       .waitForSelector('article[data-testid="tweet"]', { timeout: 10000 })
       .then(() => true)
@@ -486,19 +501,14 @@ async function discoverLatestTweetIds(
 
     if (!tweetFound) {
       console.log(
-        `   ⚠️ Không tìm thấy bài viết trên timeline của @${cleanHandle}`,
+        `   ⚠️ No tweets found in the specified timeline search window for @${cleanHandle}`,
       );
       return [];
     }
 
-    // Chuyển mốc SINCE_DATE thành timestamp ms để so sánh ngày đăng
-    const sinceTimestamp = new Date(CURRENT_QUARTER_WINDOW.since).getTime();
-
-    let reachedOlderTweets = false;
     let emptyScrollCount = 0;
 
     for (let scroll = 1; scroll <= 10; scroll++) {
-      // Bóc tách tweetId và thời gian đăng từ DOM timeline
       const tweetsOnPage = await page.evaluate(() => {
         const articles = Array.from(
           document.querySelectorAll('article[data-testid="tweet"]'),
@@ -528,16 +538,6 @@ async function discoverLatestTweetIds(
       const prevSize = discoveredIds.size;
 
       for (const item of tweetsOnPage) {
-        // Kiểm tra thời gian đăng bài
-        if (item.datetime) {
-          const itemTime = new Date(item.datetime).getTime();
-          if (itemTime < sinceTimestamp) {
-            reachedOlderTweets = true;
-            continue;
-          }
-        }
-
-        // Lọc bài viết khớp với từ khóa của Translator
         const textLower = item.text.toLowerCase();
         const matchesKeyword =
           !target.requireKeywordMatch ||
@@ -547,11 +547,6 @@ async function discoverLatestTweetIds(
         if (matchesKeyword) {
           discoveredIds.add(item.id);
         }
-      }
-
-      // Đã cuộn tới các bài viết cũ hơn 3 ngày trước thì dừng cuộn
-      if (reachedOlderTweets) {
-        break;
       }
 
       const newlyFound = discoveredIds.size - prevSize;
@@ -566,7 +561,10 @@ async function discoverLatestTweetIds(
       await sleep(1800);
     }
   } catch (err) {
-    console.error(`   ⚠️ Failed loading timeline for @${cleanHandle}:`, err);
+    console.error(
+      `   ⚠️ Failed loading search timeline for @${cleanHandle}:`,
+      err,
+    );
   } finally {
     await page.close();
   }
@@ -850,7 +848,6 @@ async function runQuickUpdate() {
     return route.continue();
   });
 
-  // SỬA ĐIỂM 3: Nạp Cookie cho cả 2 domain .x.com và .twitter.com
   if (process.env.TWITTER_AUTH_TOKEN && process.env.TWITTER_CT0) {
     const domains = [".x.com", ".twitter.com"];
     for (const domain of domains) {
