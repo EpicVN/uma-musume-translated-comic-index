@@ -1,9 +1,9 @@
 import { unstable_cache } from "next/cache";
 import { PrismaClient, Prisma } from "@prisma/client";
-import TweetGridCard from "@/components/TweetGridCard";
 import Pagination from "@/components/Pagination";
 import { getReaderFiles, type CubariData } from "@/lib/reader";
 import CubariGridCard from "./CubariGridCard";
+import TweetGridClient from "./TweetGridClient";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
@@ -45,7 +45,6 @@ const searchCubariFiles = (query: string) => {
 
 const getCachedPosts = (filter: FilterQuery) => {
   const cleanQuery = filter.q?.trim() || "";
-  // Đổi tiền tố cache sang v2 để làm mới cache cũ chưa có mediaUrls
   const cacheKey = `posts-v2-${filter.page}-${cleanQuery}-${filter.tag}-${filter.artist}-${filter.translator}-${filter.sort}`;
 
   return unstable_cache(
@@ -184,28 +183,29 @@ export default async function ComicFeed({
         <Pagination currentPage={currentPage} totalPages={totalPagesCubari} />
       </>
     );
-  } else {
-    return (
-      <>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
-          {posts.map((post, index) => (
-            <TweetGridCard
-              key={post.id}
-              origId={post.originalPost.tweetId}
-              transId={post.tweetId}
-              artistName={post.originalPost.artist.name}
-              translatorName={post.translator.handle}
-              language={post.language}
-              tags={post.originalPost.tags.map((pt) => pt.tag)}
-              postedAt={post.postedAt}
-              priority={index < 4}
-              origMediaUrls={post.originalPost.mediaUrls}
-              transMediaUrls={post.mediaUrls}
-            />
-          ))}
-        </div>
-        <Pagination currentPage={currentPage} totalPages={totalPages} />
-      </>
-    );
   }
+
+  const formattedPosts = posts.map((post) => ({
+    id: post.id,
+    origId: post.originalPost.tweetId,
+    transId: post.tweetId,
+    artistName: post.originalPost.artist.name,
+    translatorName: post.translator.handle,
+    language: post.language,
+    tags: post.originalPost.tags.map((pt) => pt.tag),
+    postedAt: post.postedAt,
+    origMediaUrls: post.originalPost.mediaUrls,
+    transMediaUrls: post.mediaUrls,
+  }));
+
+  return (
+    <>
+      <TweetGridClient
+        posts={formattedPosts}
+        currentPage={currentPage}
+        totalPages={totalPages}
+      />
+      <Pagination currentPage={currentPage} totalPages={totalPages} />
+    </>
+  );
 }

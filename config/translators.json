@@ -75,7 +75,8 @@
         "language": "en",
         "keywords": [
             "UmaTranslations",
-            "ウマ娘英訳"
+            "ウマ娘英訳",
+            "Translations"
         ],
         "requireKeywordMatch": true
     },
@@ -292,6 +293,16 @@
     {
         "name": "Gigel Transilvanesti",
         "handle": "Euadi2",
+        "language": "en",
+        "keywords": [
+            "#Umamusume",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "Lycan",
+        "handle": "Locario1980",
         "language": "en",
         "keywords": [
             "#Umamusume",

@@ -7,31 +7,31 @@ on:
 
 jobs:
   update-tags:
-    runs-on: self-hosted # Chuyển sang chạy trên máy của bạn
+    runs-on: self-hosted
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Tận dụng Node.js sẵn có trên máy hoặc setup nhanh không cần cache thừa
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "npm"
 
-      - name: Install dependencies
-        run: npm install
+      # Chỉ chạy install nếu chưa có node_modules (tiết kiệm thời gian quét)
+      - name: Install dependencies (if needed)
+        run: |
+          if (-not (Test-Path "node_modules")) {
+            npm install
+          }
 
-      # Cài đặt Playwright browser cho Windows
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium
-
+      # Chromium đã có sẵn trên máy từ lần chạy đầu tiên, chỉ cần đảm bảo có Prisma Client
       - name: Generate Prisma Client
         run: npx prisma generate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
 
-      # Bỏ xvfb-run vì Windows đã có sẵn giao diện đồ họa
       - name: Run update script
         run: npx tsx scripts/update-latest.ts
         env:

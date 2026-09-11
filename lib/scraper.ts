@@ -50,6 +50,13 @@ const EXCLUDED_LANG_KEYWORDS = [
   "português",
   "portugues",
   "traduction",
+
+  // other games
+  "#gakumas",
+  "学マス",
+  "Kaguya",
+  "Blue Archive",
+  "Arknights",
 ];
 
 export async function scrapeTweetMetadata(
