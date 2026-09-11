@@ -76,6 +76,16 @@ const EXCLUDED_LANG_KEYWORDS = [
   "português",
   "portugues",
   "traduction",
+
+  // Other games
+  "fate grand order",
+  "fate/grand order",
+  "blue archive",
+  "ブルーアーカイブ",
+  "ブルアカ",
+  "Kaguya",
+  "gakumas",
+  "arknights",
 ];
 
 const MAX_SCROLLS_PER_WINDOW = 100;

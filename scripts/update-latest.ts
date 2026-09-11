@@ -27,6 +27,14 @@ interface ExtendedTweetData extends TweetData {
   photos?: string[];
 }
 
+interface ScrapedResult {
+  artistName: string;
+  translatorHandle: string;
+  tweetId: string;
+  tweetUrl: string;
+  imageUrl?: string;
+}
+
 const TARGET_TRANSLATORS: TranslatorTarget[] = translatorsData;
 
 // Calculate sliding window: from 3 days ago until tomorrow (current + 1 day)
@@ -72,9 +80,96 @@ const EXCLUDED_LANG_KEYWORDS = [
   "português",
   "portugues",
   "traduction",
+
+  // Other games
+  "fate grand order",
+  "fate/grand order",
+  "blue archive",
+  "ブルーアーカイブ",
+  "ブルアカ",
+  "Kaguya",
+  "gakumas",
+  "arknights",
 ];
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// --- DISCORD WEBHOOK INTEGRATION ---
+async function sendDiscordNotification(posts: ScrapedResult[]) {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) {
+    console.warn(
+      " ⚠️ DISCORD_WEBHOOK_URL is not set. Skipping Discord notification.",
+    );
+    return;
+  }
+
+  // Silent exit if no new posts were found (avoid spam)
+  if (posts.length === 0) {
+    return;
+  }
+
+  try {
+    // Discord limits max 10 embeds per single webhook call
+    const embeds = posts.slice(0, 10).map((p) => {
+      const cleanImageUrl = p.imageUrl
+        ? p.imageUrl.replace(/name=[a-zA-Z0-9]+/, "name=medium")
+        : undefined;
+
+      return {
+        title: `${p.artistName} ➔ @${p.translatorHandle}`,
+        url: p.tweetUrl,
+        color: 4044018, // Cyan #3db4f2
+        image: cleanImageUrl ? { url: cleanImageUrl } : undefined,
+        footer: { text: `Tweet ID: ${p.tweetId}` },
+      };
+    });
+
+    const content = `✅ **Auto Update Complete!** Found and saved **${posts.length}** new translated comic(s).${
+      posts.length > 10
+        ? `\n*(Showing first 10 posts. ${posts.length - 10} more in database)*`
+        : ""
+    }`;
+
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, embeds }),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error(
+        ` ❌ Discord rejected payload [Status ${res.status}]:`,
+        errorText,
+      );
+    } else {
+      console.log(
+        ` 💬 Discord notification successfully delivered for ${posts.length} new posts!`,
+      );
+    }
+  } catch (err) {
+    console.error(" ⚠️ Failed to execute Discord webhook fetch:", err);
+  }
+}
+
+async function sendDiscordAlert(errorMessage: string) {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) return;
+
+  try {
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: `🚨 **CRAWLER ALERT** 🚨\nExecution encountered an unexpected failure:\n\`\`\`${errorMessage}\`\`\``,
+      }),
+    });
+  } catch (err) {
+    console.error(" ⚠️ Failed to send Discord alert:", err);
+  }
+}
+// -----------------------------------
 
 function parseValidDate(dateStr?: string, tweetId?: string): Date {
   if (dateStr) {
@@ -458,7 +553,6 @@ async function discoverLatestTweetIds(
   const discoveredIds = new Set<string>();
   const cleanHandle = target.handle.replace(/^@/, "");
 
-  // Build keyword filter query for X search
   let keywordQuery = "";
   if (
     target.requireKeywordMatch &&
@@ -471,7 +565,6 @@ async function discoverLatestTweetIds(
     keywordQuery = ` (${formattedKeywords})`;
   }
 
-  // Construct Search Query: from:<handle> since:<YYYY-MM-DD> until:<YYYY-MM-DD>
   const query = `(from:${cleanHandle})${keywordQuery} since:${CURRENT_QUARTER_WINDOW.since} until:${CURRENT_QUARTER_WINDOW.until}`;
   const searchUrl = `https://x.com/search?q=${encodeURIComponent(query)}&f=live`;
 
@@ -493,7 +586,6 @@ async function discoverLatestTweetIds(
     console.log(`   📍 Destination URL: ${actualUrl}`);
     console.log(`   📑 Page Title: "${actualTitle}"`);
 
-    // Check if timeline search returned any tweets
     const tweetFound = await page
       .waitForSelector('article[data-testid="tweet"]', { timeout: 10000 })
       .then(() => true)
@@ -575,11 +667,13 @@ async function discoverLatestTweetIds(
 async function processTranslatorLatest(
   context: BrowserContext,
   target: TranslatorTarget,
-) {
+): Promise<ScrapedResult[]> {
   console.log(`\n-------------------------------------------------------`);
   console.log(`🔍 Checking latest posts: ${target.name} (@${target.handle})`);
 
+  const newScrapedPosts: ScrapedResult[] = [];
   const translatorHandleWithAt = `@${target.handle.replace(/^@/, "")}`;
+
   const translator = await prisma.creator.upsert({
     where: { handle: translatorHandleWithAt },
     update: {
@@ -614,7 +708,6 @@ async function processTranslatorLatest(
       .map((post) => post.tweetId),
   );
 
-  let savedCount = 0;
   let skippedCount = 0;
 
   for (let idx = 0; idx < tweetIdList.length; idx++) {
@@ -780,7 +873,15 @@ async function processTranslatorLatest(
       },
     });
 
-    savedCount++;
+    // Record newly added comic
+    newScrapedPosts.push({
+      artistName: origData.name,
+      translatorHandle: target.handle.replace(/^@/, ""),
+      tweetId: transData.tweetId,
+      tweetUrl: transData.tweetUrl,
+      imageUrl: transData.photos?.[0] || origData.photos?.[0],
+    });
+
     console.log(
       `   ✅ [New] ${origData.name} ➔ @${target.handle} (${tId}) [${transData.photos?.length || 0} images]`,
     );
@@ -789,8 +890,10 @@ async function processTranslatorLatest(
   }
 
   console.log(
-    `   📊 Summary: Saved ${savedCount} | Existing/Skipped ${skippedCount}`,
+    `   📊 Summary: Saved ${newScrapedPosts.length} | Existing/Skipped ${skippedCount}`,
   );
+
+  return newScrapedPosts;
 }
 
 async function runQuickUpdate() {
@@ -806,6 +909,10 @@ async function runQuickUpdate() {
   console.log(
     " - TWITTER_CT0:",
     process.env.TWITTER_CT0 ? "Loaded" : "MISSING",
+  );
+  console.log(
+    " - DISCORD_WEBHOOK_URL:",
+    process.env.DISCORD_WEBHOOK_URL ? "Loaded" : "MISSING",
   );
 
   const browser = await chromium.launch({
@@ -877,19 +984,30 @@ async function runQuickUpdate() {
     `🚀 Starting quick update across ${TARGET_TRANSLATORS.length} translators...`,
   );
 
+  let totalNewPosts: ScrapedResult[] = [];
+
   for (const target of TARGET_TRANSLATORS) {
-    await processTranslatorLatest(context, target);
+    const results = await processTranslatorLatest(context, target);
+    totalNewPosts = totalNewPosts.concat(results);
+
     console.log(`⏳ Cooldown for 3 seconds before next translator...`);
     await sleep(3000);
   }
 
   await browser.close();
-  console.log(`\n🎉 UPDATE COMPLETE!`);
+
+  // Send aggregated report to Discord
+  if (totalNewPosts.length > 0) {
+    await sendDiscordNotification(totalNewPosts);
+  }
+
+  console.log(`\n🎉 UPDATE COMPLETE! Total new posts: ${totalNewPosts.length}`);
 }
 
 runQuickUpdate()
-  .catch((err) => {
+  .catch(async (err) => {
     console.error("Update failed:", err);
+    await sendDiscordAlert(err instanceof Error ? err.message : String(err));
     process.exit(1);
   })
   .finally(async () => await prisma.$disconnect());
