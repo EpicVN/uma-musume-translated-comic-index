@@ -110,43 +110,58 @@ async function sendDiscordNotification(posts: ScrapedResult[]) {
   }
 
   try {
-    // Discord limits max 10 embeds per single webhook call
-    const embeds = posts.slice(0, 10).map((p) => {
-      const cleanImageUrl = p.imageUrl
-        ? p.imageUrl.replace(/name=[a-zA-Z0-9]+/, "name=medium")
-        : undefined;
+    // Discord enforces a maximum of 10 embeds per message.
+    // Split the array into batches of up to 10 posts each.
+    const CHUNK_SIZE = 10;
+    const batches: ScrapedResult[][] = [];
+    for (let i = 0; i < posts.length; i += CHUNK_SIZE) {
+      batches.push(posts.slice(i, i + CHUNK_SIZE));
+    }
 
-      return {
-        title: `${p.artistName} ➔ @${p.translatorHandle}`,
-        url: p.tweetUrl,
-        color: 4044018, // Cyan #3db4f2
-        image: cleanImageUrl ? { url: cleanImageUrl } : undefined,
-        footer: { text: `Tweet ID: ${p.tweetId}` },
-      };
-    });
+    for (let index = 0; index < batches.length; index++) {
+      const batch = batches[index];
+      const embeds = batch.map((p) => {
+        const cleanImageUrl = p.imageUrl
+          ? p.imageUrl.replace(/name=[a-zA-Z0-9]+/, "name=medium")
+          : undefined;
 
-    const content = `✅ **Auto Update Complete!** Found and saved **${posts.length}** new translated comic(s).${
-      posts.length > 10
-        ? `\n*(Showing first 10 posts. ${posts.length - 10} more in database)*`
-        : ""
-    }`;
+        return {
+          title: `${p.artistName} ➔ @${p.translatorHandle}`,
+          url: p.tweetUrl,
+          color: 4044018, // Cyan #3db4f2
+          image: cleanImageUrl ? { url: cleanImageUrl } : undefined,
+          footer: { text: `Tweet ID: ${p.tweetId}` },
+        };
+      });
 
-    const res = await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content, embeds }),
-    });
+      // Header message only on the first batch
+      const content =
+        index === 0
+          ? `✅ **Update Complete!** Found and saved **${posts.length}** new translated comic(s).`
+          : undefined;
 
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error(
-        ` ❌ Discord rejected payload [Status ${res.status}]:`,
-        errorText,
-      );
-    } else {
-      console.log(
-        ` 💬 Discord notification successfully delivered for ${posts.length} new posts!`,
-      );
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, embeds }),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error(
+          ` ❌ Discord rejected batch ${index + 1}/${batches.length} [Status ${res.status}]:`,
+          errorText,
+        );
+      } else {
+        console.log(
+          ` 💬 Delivered batch ${index + 1}/${batches.length} (${batch.length} posts).`,
+        );
+      }
+
+      // Small pause to avoid hitting Discord rate limits between consecutive messages
+      if (index < batches.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
     }
   } catch (err) {
     console.error(" ⚠️ Failed to execute Discord webhook fetch:", err);
