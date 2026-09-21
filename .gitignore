@@ -50,3 +50,4 @@ next-env.d.ts
 
 config/test-cases.json
 scripts/test-characters.ts
+scripts/discord-test.ts

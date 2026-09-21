@@ -309,5 +309,15 @@
             "ウマ娘英訳"
         ],
         "requireKeywordMatch": true
+    },
+    {
+        "name": "Hideki🔞(TL Comms OPEN)",
+        "handle": "_OrdinaryWitch",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
     }
 ]
