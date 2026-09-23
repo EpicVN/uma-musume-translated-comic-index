@@ -1108,7 +1108,6 @@
         "name": "Hishi Miracle",
         "jp": "ヒシミラクル",
         "aliases": [
-            "miracle",
             "hishi miracle",
             "Mirako",
             "ミラクル"
@@ -1120,7 +1119,6 @@
         "jp": "ケイエスミラクル",
         "aliases": [
             "ks miracle",
-            "miracle",
             "ケイエス"
         ]
     },
@@ -1589,7 +1587,6 @@
         "jp": "タイトルホルダー",
         "aliases": [
             "titleholder",
-            "title",
             "タイトルホルダー"
         ]
     },

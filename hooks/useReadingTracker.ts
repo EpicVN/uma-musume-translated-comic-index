@@ -11,6 +11,7 @@ import {
 const HISTORY_KEY = "uma_reading_history_v1";
 const BOOKMARKS_KEY = "uma_bookmarks_v1";
 const MAX_HISTORY_ITEMS = 60;
+export const MAX_BOOKMARKS_ITEMS = 200; // <--- Export giới hạn bookmark
 const CUSTOM_STORAGE_EVENT = "uma_storage_updated";
 
 const EMPTY_HISTORY: ReadingHistoryItem[] = [];
@@ -26,7 +27,6 @@ function subscribe(callback: () => void) {
   };
 }
 
-// Read raw items with memoized cache to avoid re-render loops
 let lastHistoryRaw: string | null = null;
 let cachedHistory: ReadingHistoryItem[] = EMPTY_HISTORY;
 
@@ -65,6 +65,11 @@ function notifyStorageChange() {
   window.dispatchEvent(new Event(CUSTOM_STORAGE_EVENT));
 }
 
+export type ToggleBookmarkResult = {
+  ok: boolean;
+  reason?: "limit_reached" | "error";
+};
+
 export function useReadingTracker() {
   const history = useSyncExternalStore(
     subscribe,
@@ -78,10 +83,8 @@ export function useReadingTracker() {
     () => EMPTY_BOOKMARKS,
   );
 
-  // Check if code runs on client
   const isReady = typeof window !== "undefined";
 
-  // Save or update reading progress
   const recordProgress = useCallback((item: SaveProgressInput) => {
     const current = getHistorySnapshot();
     const remaining = current.filter((h) => h.tweetId !== item.tweetId);
@@ -98,21 +101,41 @@ export function useReadingTracker() {
     }
   }, []);
 
-  // Toggle bookmark entry
-  const toggleBookmark = useCallback((item: ToggleBookmarkInput) => {
-    const current = getBookmarksSnapshot();
-    const exists = current.some((b) => b.tweetId === item.tweetId);
-    const nextState: BookmarkItem[] = exists
-      ? current.filter((b) => b.tweetId !== item.tweetId)
-      : [{ ...item, bookmarkedAt: Date.now() }, ...current];
+  // Toggle bookmark with limit check
+  const toggleBookmark = useCallback(
+    (item: ToggleBookmarkInput): ToggleBookmarkResult => {
+      const current = getBookmarksSnapshot();
+      const exists = current.some((b) => b.tweetId === item.tweetId);
 
-    try {
-      localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(nextState));
-      notifyStorageChange();
-    } catch (e) {
-      console.error("Failed to update bookmarks", e);
-    }
-  }, []);
+      // Nếu chưa có mà danh sách đã chạm ngưỡng MAX_BOOKMARKS_ITEMS -> Chặn & thông báo
+      if (!exists && current.length >= MAX_BOOKMARKS_ITEMS) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("uma_bookmark_warning", {
+              detail: {
+                message: `Bookmark đã đạt giới hạn tối đa (${MAX_BOOKMARKS_ITEMS} truyện). Vui lòng bỏ lưu bớt truyện cũ để thêm mới!`,
+              },
+            }),
+          );
+        }
+        return { ok: false, reason: "limit_reached" };
+      }
+
+      const nextState: BookmarkItem[] = exists
+        ? current.filter((b) => b.tweetId !== item.tweetId)
+        : [{ ...item, bookmarkedAt: Date.now() }, ...current];
+
+      try {
+        localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(nextState));
+        notifyStorageChange();
+        return { ok: true };
+      } catch (e) {
+        console.error("Failed to update bookmarks", e);
+        return { ok: false, reason: "error" };
+      }
+    },
+    [],
+  );
 
   const isBookmarked = useCallback(
     (tweetId: string) => bookmarks.some((b) => b.tweetId === tweetId),
@@ -137,6 +160,7 @@ export function useReadingTracker() {
     isReady,
     history,
     bookmarks,
+    maxBookmarks: MAX_BOOKMARKS_ITEMS,
     recordProgress,
     toggleBookmark,
     isBookmarked,
