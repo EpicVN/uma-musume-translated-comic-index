@@ -4,6 +4,7 @@ import NextTopLoader from "nextjs-toploader";
 import PageLoadingOverlay from "@/components/PageLoadingOverlay";
 import GlobalToast from "@/components/GlobalToast";
 import Footer from "@/components/Footer";
+import { Analytics } from "@vercel/analytics/react";
 
 export const metadata: Metadata = {
   // BẮT BUỘC: Thêm metadataBase để Next.js tự ghép domain vào ảnh OpenGraph
@@ -84,6 +85,7 @@ export default function RootLayout({
         <div className="flex-1 flex flex-col">
           <PageLoadingOverlay>
             {children}
+            <Analytics />
             <GlobalToast />
           </PageLoadingOverlay>
         </div>
