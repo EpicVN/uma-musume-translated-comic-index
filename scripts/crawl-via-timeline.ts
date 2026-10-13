@@ -622,6 +622,13 @@ async function processTranslator(
       continue;
     }
 
+    const isRepairing = existingRecords.some((r) => r.tweetId === tId);
+    if (isRepairing) {
+      console.log(
+        `   🛠️ [Repairing Media] ID ${tId} exists in DB with empty media. Re-fetching...`,
+      );
+    }
+
     const transTweetUrl = `https://x.com/${target.handle.replace(/^@/, "")}/status/${tId}`;
 
     let transData: ExtendedTweetData | null = await scrapeTweetMetadata(
@@ -791,7 +798,7 @@ async function processTranslator(
       `   ✅ [${idx + 1}/${tweetIdList.length}] Saved: ${origData.name} ➔ @${target.handle} (${tId}) [${transData.photos?.length || 0} images]`,
     );
 
-    await sleep(200);
+    await sleep(2000);
   }
 
   console.log(

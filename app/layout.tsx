@@ -6,6 +6,9 @@ import GlobalToast from "@/components/GlobalToast";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
+  // BẮT BUỘC: Thêm metadataBase để Next.js tự ghép domain vào ảnh OpenGraph
+  metadataBase: new URL("https://uma-index.top"),
+
   title: {
     default: "A Certain Umazing Index | Uma Musume Comic Archive",
     template: "%s | A Certain Umazing Index",
@@ -26,7 +29,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://umaindex.vercel.app/", // Đổi thành domain thật của bạn
+    url: "https://uma-index.top", // Cập nhật domain chính thức
     title: "A Certain Umazing Index | Uma Musume Comic Archive",
     description:
       "An archive for translated Uma Musume comics on X (Twitter) & Cubari.",
