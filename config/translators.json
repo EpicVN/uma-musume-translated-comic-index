@@ -300,36 +300,34 @@
         ],
         "requireKeywordMatch": true
     },
-    [
-        {
-            "name": "吉山明石 (Midterm lock in)",
-            "handle": "AkashiYoshiyama",
-            "language": "en",
-            "keywords": [
-                "UmaTranslations",
-                "ウマ娘英訳"
-            ],
-            "requireKeywordMatch": true
-        },
-        {
-            "name": "ritsuu",
-            "handle": "cewcowr",
-            "language": "en",
-            "keywords": [
-                "UmaTranslations",
-                "ウマ娘英訳"
-            ],
-            "requireKeywordMatch": true
-        },
-        {
-            "name": "ImSimon!93.7 Hokko Tarumae Plushie this month",
-            "handle": "simonrojas937",
-            "language": "en",
-            "keywords": [
-                "UmaTranslations",
-                "ウマ娘英訳"
-            ],
-            "requireKeywordMatch": true
-        }
-    ]
+    {
+        "name": "吉山明石 (Midterm lock in)",
+        "handle": "AkashiYoshiyama",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "ritsuu",
+        "handle": "cewcowr",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "ImSimon!93.7 Hokko Tarumae Plushie this month",
+        "handle": "simonrojas937",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    }
 ]
