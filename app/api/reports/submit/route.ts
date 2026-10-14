@@ -32,25 +32,25 @@ export async function POST(req: NextRequest) {
       "127.0.0.1";
 
     // 2. Kiểm tra Rate Limit (Bỏ qua nếu đặt DISABLE_RATE_LIMIT=true trong .env.local)
-    // if (process.env.DISABLE_RATE_LIMIT !== "true") {
-    //   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-    //   const recentReport = await prisma.comicReport.findFirst({
-    //     where: {
-    //       ipAddress,
-    //       createdAt: { gte: tenMinutesAgo },
-    //     },
-    //   });
+    if (process.env.DISABLE_RATE_LIMIT !== "true") {
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+      const recentReport = await prisma.comicReport.findFirst({
+        where: {
+          ipAddress,
+          createdAt: { gte: tenMinutesAgo },
+        },
+      });
 
-    //   if (recentReport) {
-    //     return NextResponse.json(
-    //       {
-    //         error:
-    //           "You are submitting too fast. Please wait 10 minutes before submitting again.",
-    //       },
-    //       { status: 429 }
-    //     );
-    //   }
-    // }
+      if (recentReport) {
+        return NextResponse.json(
+          {
+            error:
+              "You are submitting too fast. Please wait 10 minutes before submitting again.",
+          },
+          { status: 429 }
+        );
+      }
+    }
 
     // 3. Lưu báo cáo vào Cơ sở dữ liệu (PostgreSQL / Neon)
     const report = await prisma.comicReport.create({
