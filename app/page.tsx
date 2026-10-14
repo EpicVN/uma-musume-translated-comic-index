@@ -27,7 +27,7 @@ const getFilterOptions = unstable_cache(
     return { allTags, artists, translators };
   },
   ["filter-options-data"],
-  { revalidate: 3600, tags: ["filter-options"] },
+  { revalidate: 60, tags: ["filter-options"] },
 );
 
 interface PageProps {
