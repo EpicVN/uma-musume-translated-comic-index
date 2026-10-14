@@ -3,6 +3,9 @@
 import Image from "next/image";
 import { format } from "date-fns";
 import BookmarkButton from "@/components/BookmarkButton";
+import ReportModal from "@/components/ReportModal";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 interface TagItem {
   id: string;
@@ -31,6 +34,7 @@ function formatHandle(handle: string) {
 }
 
 export default function TweetGridCard({
+  origId,
   transId,
   artistName,
   translatorName,
@@ -41,6 +45,11 @@ export default function TweetGridCard({
   transMediaUrls = [],
   onOpenReader,
 }: TweetGridCardProps) {
+  const searchParams = useSearchParams();
+  const currentQuery = searchParams.toString()
+    ? `?${searchParams.toString()}`
+    : "";
+
   const formattedDate = postedAt
     ? format(new Date(postedAt), "MMM d, yyyy")
     : null;
@@ -63,9 +72,10 @@ export default function TweetGridCard({
       )}
 
       {/* ================= KHU VỰC ẢNH CHÍNH ================= */}
-      <div
-        className="absolute inset-0 w-full h-full cursor-pointer z-0"
-        onClick={onOpenReader}
+      <Link
+        href={`/post/${origId}${currentQuery}`}
+        scroll={false}
+        className="group block"
       >
         {displayThumbnail ? (
           <Image
@@ -103,7 +113,7 @@ export default function TweetGridCard({
 
         {/* Gradient Đáy - Tạo độ tối để chữ Footer hiển thị rõ */}
         <div className="absolute inset-x-0 bottom-0 h-40 bg-linear-to-t from-[#050b14] via-[#050b14]/80 to-transparent pointer-events-none z-10"></div>
-      </div>
+      </Link>
 
       {/* ================= HEADER OVERLAY (Nổi trên đỉnh) ================= */}
       <div className="absolute top-0 inset-x-0 p-3 flex items-start justify-between z-20 bg-linear-to-b from-[#0a111a]/90 via-[#0a111a]/50 to-transparent pb-12 pointer-events-none">
@@ -184,25 +194,35 @@ export default function TweetGridCard({
 
         {/* Dòng Action & Date */}
         <div className="flex items-center justify-between pt-2.5 border-t border-white/15 pointer-events-auto">
-          {/* Nút View Post (Link nhỏ, gọn gàng hơn nút đen đặc) */}
-          <a
-            href={`https://x.com/i/status/${transId}`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1.5 text-[#8ba0b2] hover:text-[#3db4f2] text-[9px] font-black tracking-widest uppercase transition-colors"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <svg
-              className="w-3.5 h-3.5"
-              fill="currentColor"
-              viewBox="0 0 24 24"
+          {/* Cụm Action bên trái: Link X Post + Nút Report/Edit */}
+          <div className="flex items-center gap-2.5">
+            <a
+              href={`https://x.com/i/status/${transId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 text-[#8ba0b2] hover:text-[#3db4f2] text-[9px] font-black tracking-widest uppercase transition-colors"
+              onClick={(e) => e.stopPropagation()}
             >
-              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-            </svg>
-            X Post
-          </a>
+              <svg
+                className="w-3.5 h-3.5"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </svg>
+              X Post
+            </a>
 
-          {/* Ngày tháng */}
+            {/* Nút bật popup Report / Góp ý */}
+            <ReportModal
+              postId={origId || transId}
+              postTitle={`Comic by ${artistName} (TL by ${translatorName})`}
+              thumbnailUrl={transMediaUrls[0] || origMediaUrls[0]}
+              currentTags={tags} // tags: { id: string; name: string }[]
+            />
+          </div>
+
+          {/* Ngày tháng & Số trang */}
           <div className="flex items-center gap-2">
             {totalPages > 1 && (
               <span className="text-[10px] font-black text-[#3db4f2]">

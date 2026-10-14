@@ -7,7 +7,6 @@ import Footer from "@/components/Footer";
 import { Analytics } from "@vercel/analytics/react";
 
 export const metadata: Metadata = {
-  // BẮT BUỘC: Thêm metadataBase để Next.js tự ghép domain vào ảnh OpenGraph
   metadataBase: new URL("https://uma-index.top"),
 
   title: {
@@ -30,7 +29,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://uma-index.top", // Cập nhật domain chính thức
+    url: "https://uma-index.top",
     title: "A Certain Umazing Index | Uma Musume Comic Archive",
     description:
       "An archive for translated Uma Musume comics on X (Twitter) & Cubari.",
@@ -66,8 +65,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
+  modal, // 👈 1. Nhận thêm slot modal từ thư mục @modal
 }: {
   children: React.ReactNode;
+  modal: React.ReactNode; // 👈 2. Định nghĩa kiểu dữ liệu cho modal
 }) {
   return (
     <html lang="en">
@@ -85,6 +86,7 @@ export default function RootLayout({
         <div className="flex-1 flex flex-col">
           <PageLoadingOverlay>
             {children}
+            {modal} {/* 👈 3. Render modal song song cùng trang nền */}
             <Analytics />
             <GlobalToast />
           </PageLoadingOverlay>

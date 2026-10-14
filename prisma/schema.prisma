@@ -155,3 +155,33 @@ model Series {
 
   @@index([slug])
 }
+
+// -------------------------------------------------------------
+// 6. Discord report admin
+// -------------------------------------------------------------
+enum ReportType {
+  ORIGINAL_LINK    // Bổ sung/sửa link gốc Twitter
+  CHARACTER_TAG    // Bổ sung Tag nhân vật
+  BROKEN_MEDIA     // Ảnh hỏng / lỗi
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ComicReport {
+  id          String       @id @default(cuid())
+  postId      String
+  type        ReportType
+  content     String       // Nội dung đề xuất (link hoặc tên tag)
+  ipAddress   String
+  status      ReportStatus @default(PENDING)
+  handledBy   String?      // Tên Mod đã duyệt
+  createdAt   DateTime     @default(now())
+
+  @@index([ipAddress, createdAt])
+  @@index([status])
+}

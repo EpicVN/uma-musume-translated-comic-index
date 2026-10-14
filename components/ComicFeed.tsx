@@ -45,7 +45,7 @@ const searchCubariFiles = (query: string) => {
 
 const getCachedPosts = (filter: FilterQuery) => {
   const cleanQuery = filter.q?.trim() || "";
-  const cacheKey = `posts-v2-${filter.page}-${cleanQuery}-${filter.tag}-${filter.artist}-${filter.translator}-${filter.sort}`;
+  const cacheKey = `posts-v3-${filter.page}-${cleanQuery}-${filter.tag}-${filter.artist}-${filter.translator}-${filter.sort}`;
 
   return unstable_cache(
     async () => {
@@ -54,10 +54,53 @@ const getCachedPosts = (filter: FilterQuery) => {
 
       if (cleanQuery.length >= 2) {
         where.OR = [
+          // 1. So khớp chính xác theo ID (CUID) hoặc Tweet ID
+          { id: cleanQuery },
+          { tweetId: cleanQuery },
+          { originalPostId: cleanQuery },
+          { originalPost: { id: cleanQuery } },
+          { originalPost: { tweetId: cleanQuery } },
+
+          // 2. Tìm theo nội dung tweet
           { content: { contains: cleanQuery, mode: "insensitive" } },
           {
             originalPost: {
               content: { contains: cleanQuery, mode: "insensitive" },
+            },
+          },
+
+          // 3. Tìm theo tên tác giả (Artist)
+          {
+            originalPost: {
+              artist: {
+                OR: [
+                  { name: { contains: cleanQuery, mode: "insensitive" } },
+                  { handle: { contains: cleanQuery, mode: "insensitive" } },
+                ],
+              },
+            },
+          },
+
+          // 4. Tìm theo người dịch (Translator)
+          {
+            translator: {
+              OR: [
+                { name: { contains: cleanQuery, mode: "insensitive" } },
+                { handle: { contains: cleanQuery, mode: "insensitive" } },
+              ],
+            },
+          },
+
+          // 5. Tìm theo tên Tag nhân vật
+          {
+            originalPost: {
+              tags: {
+                some: {
+                  tag: {
+                    name: { contains: cleanQuery, mode: "insensitive" },
+                  },
+                },
+              },
             },
           },
         ];
@@ -156,17 +199,6 @@ export default async function ComicFeed({
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  if (posts.length === 0) {
-    return (
-      <div className="text-center py-20 bg-[#151f2e] rounded-xl border border-[#1e2d42]">
-        <p className="text-lg text-[#8ba0b2]">No translated manga found.</p>
-        <p className="text-sm text-[#5a6f82] mt-1">
-          Try resetting or adjusting the filters.
-        </p>
-      </div>
-    );
-  }
-
   if (modeOption === "cubari") {
     return (
       <>
@@ -185,9 +217,21 @@ export default async function ComicFeed({
     );
   }
 
+  if (posts.length === 0) {
+    return (
+      <div className="text-center py-20 bg-[#151f2e] rounded-xl border border-[#1e2d42]">
+        <p className="text-lg text-[#8ba0b2]">No translated manga found.</p>
+        <p className="text-sm text-[#5a6f82] mt-1">
+          Try resetting or adjusting the filters.
+        </p>
+      </div>
+    );
+  }
+
   const formattedPosts = posts.map((post) => ({
     id: post.id,
-    origId: post.originalPost.tweetId,
+    origId: post.originalPost.id,
+    origTweetId: post.originalPost.tweetId,
     transId: post.tweetId,
     artistName: post.originalPost.artist.name,
     translatorName: post.translator.handle,

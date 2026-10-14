@@ -4,10 +4,12 @@ import { useEffect, useState, useRef } from "react";
 import Image from "next/image";
 import { Tweet } from "react-tweet";
 import { useReadingTracker } from "@/hooks/useReadingTracker";
+import ReportModal from "@/components/ReportModal";
 
 export interface ComicPostItem {
   id: string;
   origId: string;
+  origTweetId?: string;
   transId: string;
   artistName: string;
   translatorName: string;
@@ -15,7 +17,7 @@ export interface ComicPostItem {
   postedAt: Date | string;
   origMediaUrls: string[];
   transMediaUrls: string[];
-  tags: { id: string; name: string; slug: string }[];
+  tags: { id: string; name: string; slug: string }[]; // 👈 Đổi id?: string và slug?: string thành string bắt buộc
 }
 
 interface ReaderModalProps {
@@ -194,65 +196,92 @@ export default function ReaderModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="sticky top-0 z-30 flex flex-col sm:flex-row sm:items-center justify-between px-5 py-3.5 bg-linear-to-b from-[#0a111a] to-[#0a111a]/80 backdrop-blur-md border-b border-[#1e2d42] shrink-0 gap-3">
-          <div className="flex items-center justify-between w-full sm:w-auto">
-            {/* Credits HUD (Game Style) */}
-            <div className="flex items-center gap-3 truncate">
-              {/* Artist */}
-              <div className="flex items-center gap-1.5 drop-shadow-md">
-                <span className="text-[9px] font-black tracking-widest bg-linear-to-r from-[#f43f5e] to-[#be123c] text-white px-2 py-0.5 rounded shadow-sm shrink-0">
-                  ART
-                </span>
-                <span className="text-[13px] font-bold text-white truncate max-w-30 sm:max-w-50">
-                  {post.artistName}
-                </span>
+        <div className="sticky top-0 z-30 flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 bg-linear-to-b from-[#0a111a] to-[#0a111a]/80 backdrop-blur-md border-b border-[#1e2d42] shrink-0 gap-2.5 sm:gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 flex-1 min-w-0">
+            {/* Top Row on Mobile: Credits + Actions */}
+            <div className="flex items-center justify-between w-full sm:w-auto">
+              {/* Credits HUD (Game Style) */}
+              <div className="flex items-center gap-2 sm:gap-3 truncate">
+                {/* ART */}
+                <div className="flex items-center gap-1.5 drop-shadow-md">
+                  <span className="text-[9px] font-black tracking-widest bg-linear-to-r from-[#f43f5e] to-[#be123c] text-white px-2 py-0.5 rounded shadow-xs shrink-0">
+                    ART
+                  </span>
+                  <span className="text-[12px] sm:text-[13px] font-bold text-white truncate max-w-28 sm:max-w-44">
+                    {post.artistName}
+                  </span>
+                </div>
+
+                <svg
+                  className="w-3.5 h-3.5 text-[#3db4f2] opacity-60 shrink-0"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+
+                {/* TL */}
+                <div className="flex items-center gap-1.5 drop-shadow-md">
+                  <span className="text-[9px] font-black tracking-widest bg-linear-to-r from-[#eab308] to-[#ca8a04] text-white px-2 py-0.5 rounded shadow-xs shrink-0">
+                    TL
+                  </span>
+                  <span className="text-[12px] sm:text-[13px] font-bold text-[#e2e8f0] truncate max-w-28 sm:max-w-44">
+                    {formatHandle(post.translatorName)}
+                  </span>
+                </div>
               </div>
 
-              <svg
-                className="w-4 h-4 text-[#3db4f2] opacity-60 shrink-0"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  d="M13 5l7 7-7 7M5 5l7 7-7 7"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+              {/* 📱 Mobile Actions: Report + Close */}
+              <div className="flex items-center gap-1.5 sm:hidden">
+                <ReportModal
+                  postId={post.origId}
+                  postTitle={`Comic by ${post.artistName} (TL by ${post.translatorName})`}
+                  thumbnailUrl={post.transMediaUrls[0] || post.origMediaUrls[0]}
+                  currentTags={post.tags}
                 />
-              </svg>
-
-              {/* Translator */}
-              <div className="flex items-center gap-1.5 drop-shadow-md">
-                <span className="text-[9px] font-black tracking-widest bg-linear-to-r from-[#eab308] to-[#ca8a04] text-white px-2 py-0.5 rounded shadow-sm shrink-0">
-                  TL
-                </span>
-                <span className="text-[13px] font-bold text-[#e2e8f0] truncate max-w-30 sm:max-w-50">
-                  {formatHandle(post.translatorName)}
-                </span>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-1.5 rounded-xl text-[#8ba0b2] hover:text-white bg-white/5 border border-white/10 active:scale-95"
+                  title="Close"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2.5}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
               </div>
             </div>
 
-            {/* Mobile Close Button */}
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 rounded-xl text-[#8ba0b2] hover:text-white bg-white/5 sm:hidden border border-white/10"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2.5}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+            {/* Tags Slider */}
+            {post.tags && post.tags.length > 0 && (
+              <div className="flex items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] py-0.5 max-w-full">
+                {post.tags.map((tag) => (
+                  <span
+                    key={tag.id || tag.slug || tag.name}
+                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#132238]/90 text-[#7dd3fc] border border-[#223d63] shrink-0 shadow-xs select-none"
+                  >
+                    <span className="text-[#38bdf8] opacity-60">#</span>
+                    {tag.name}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Quick Segment Control for Mobile View */}
@@ -292,8 +321,17 @@ export default function ReaderModal({
             </button>
           </div>
 
-          {/* Desktop Header Actions */}
-          <div className="hidden sm:flex items-center gap-3">
+          {/* 💻 Desktop Header Actions */}
+          <div className="hidden sm:flex items-center gap-2.5 shrink-0">
+            {/* Nút Report Desktop */}
+            <ReportModal
+              postId={post.origId}
+              postTitle={`Comic by ${post.artistName} (TL by ${post.translatorName})`}
+              thumbnailUrl={post.transMediaUrls[0] || post.origMediaUrls[0]}
+              currentTags={post.tags}
+            />
+
+            {/* View on X */}
             <a
               href={`https://x.com/i/status/${post.transId}`}
               target="_blank"
@@ -309,10 +347,12 @@ export default function ReaderModal({
               </svg>
               View on X
             </a>
+
+            {/* Close button */}
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-xl text-[#64748b] hover:text-rose-400 bg-white/5 hover:bg-rose-500/10 transition-colors border border-transparent hover:border-rose-500/30"
+              className="p-1.5 rounded-xl text-[#64748b] hover:text-rose-400 bg-white/5 hover:bg-rose-500/10 transition-colors border border-transparent hover:border-rose-500/30 hover:cursor-pointer"
               title="Close (Esc)"
             >
               <svg
@@ -337,22 +377,22 @@ export default function ReaderModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 items-start max-w-7xl mx-auto">
             {/* --- COLUMN 1: ORIGINAL RAW --- */}
             <div
-              className={`flex flex-col items-center w-full ${mobileTab === "trans" ? "hidden md:flex" : "flex"}`}
+              className={`flex flex-col items-center w-full ${
+                mobileTab === "trans" ? "hidden md:flex" : "flex"
+              }`}
             >
-              {/* Header Cột */}
-              <div
-                className={`w-full justify-between items-center mb-3 px-2 ${mobileTab !== "both" ? "hidden md:flex" : "flex"}`}
-              >
+              {/* Header Cột: Luôn hiển thị để giữ nút Open on X cho Mobile */}
+              <div className="w-full flex justify-between items-center mb-2.5 sm:mb-3 px-1 sm:px-2">
                 <span className="font-black text-[11px] text-[#f43f5e] uppercase tracking-widest bg-[#f43f5e]/10 px-3 py-1 rounded-full border border-[#f43f5e]/20">
                   Original Raw
                 </span>
                 <a
-                  href={`https://x.com/i/status/${post.origId}`}
+                  href={`https://x.com/i/status/${post.origTweetId || post.origId}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[#64748b] hover:text-white font-black text-[9px] uppercase tracking-widest transition-colors flex items-center gap-1"
+                  className="text-[#8ba0b2] hover:text-white bg-white/5 hover:bg-[#f43f5e]/20 active:bg-white/10 px-2.5 py-1 rounded-lg border border-white/10 hover:border-[#f43f5e]/40 font-bold text-[10px] tracking-wider transition-colors flex items-center gap-1.5 shrink-0"
                 >
-                  Open on X{" "}
+                  <span>Open on X</span>
                   <svg
                     className="w-3 h-3"
                     fill="none"
@@ -399,19 +439,19 @@ export default function ReaderModal({
                   className="w-full max-w-lg [data-theme='dark'] [&_.react-tweet-theme]:bg-[#050b14]! [&_.react-tweet-theme]:border-white/10! [&_.react-tweet-theme]:rounded-2xl!"
                   data-theme="dark"
                 >
-                  <Tweet id={post.origId} />
+                  <Tweet id={post.origTweetId || post.origId} />
                 </div>
               )}
             </div>
 
             {/* --- COLUMN 2: TRANSLATED --- */}
             <div
-              className={`flex flex-col items-center w-full ${mobileTab === "raw" ? "hidden md:flex" : "flex"}`}
+              className={`flex flex-col items-center w-full ${
+                mobileTab === "raw" ? "hidden md:flex" : "flex"
+              }`}
             >
-              {/* Header Cột */}
-              <div
-                className={`w-full justify-between items-center mb-3 px-2 ${mobileTab !== "both" ? "hidden md:flex" : "flex"}`}
-              >
+              {/* Header Cột: Luôn hiển thị để giữ nút Open on X cho Mobile */}
+              <div className="w-full flex justify-between items-center mb-2.5 sm:mb-3 px-1 sm:px-2">
                 <span className="font-black text-[11px] text-[#3db4f2] uppercase tracking-widest bg-[#3db4f2]/10 px-3 py-1 rounded-full border border-[#3db4f2]/20">
                   Translated ({(post.language || "EN").toUpperCase()})
                 </span>
@@ -419,9 +459,9 @@ export default function ReaderModal({
                   href={`https://x.com/i/status/${post.transId}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[#64748b] hover:text-white font-black text-[9px] uppercase tracking-widest transition-colors flex items-center gap-1"
+                  className="text-[#8ba0b2] hover:text-white bg-white/5 hover:bg-[#3db4f2]/20 active:bg-white/10 px-2.5 py-1 rounded-lg border border-white/10 hover:border-[#3db4f2]/40 font-bold text-[10px] tracking-wider transition-colors flex items-center gap-1.5 shrink-0"
                 >
-                  Open on X{" "}
+                  <span>Open on X</span>
                   <svg
                     className="w-3 h-3"
                     fill="none"
