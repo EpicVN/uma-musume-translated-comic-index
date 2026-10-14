@@ -33,7 +33,6 @@ const CATEGORIES = [
   { value: "REPLACE_TAG", label: "🔄 Replace Incorrect Tag" },
   { value: "ORIGINAL_LINK", label: "🔗 Add / Update Original Twitter Link" },
   { value: "BROKEN_MEDIA", label: "🖼️ Broken / Missing Image" },
-  { value: "OTHER", label: "💬 Other Feedback" },
 ];
 
 export default function ReportModal({
@@ -53,7 +52,14 @@ export default function ReportModal({
     isError: boolean;
   } | null>(null);
 
-  // Quản lý Custom Dropdown danh mục (thay thế thẻ select mặc định của mobile)
+  // State riêng cho mục Broken Image
+  const [brokenTarget, setBrokenTarget] = useState<"TRANSLATED" | "ORIGINAL">(
+    "TRANSLATED",
+  );
+  const [brokenUrl, setBrokenUrl] = useState("");
+  const [brokenNote, setBrokenNote] = useState("");
+
+  // Quản lý Custom Dropdown danh mục
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -74,6 +80,9 @@ export default function ReportModal({
     setIsCharMenuOpen(false);
     setIsCategoryMenuOpen(false);
     setCharSearch("");
+    setBrokenTarget("TRANSLATED");
+    setBrokenUrl("");
+    setBrokenNote("");
   }, [isSubmitting]);
 
   // Phím tắt Escape
@@ -96,12 +105,10 @@ export default function ReportModal({
         const el = e.target;
         const rect = el.getBoundingClientRect();
 
-        // Vùng thanh cuộn dọc nằm giữa (rect.left + clientLeft + clientWidth) và rect.right
         const isClickOnVerticalScrollbar =
           e.clientX >= rect.left + el.clientLeft + el.clientWidth &&
           e.clientX <= rect.right;
 
-        // Vùng thanh cuộn ngang nằm giữa (rect.top + clientTop + clientHeight) và rect.bottom
         const isClickOnHorizontalScrollbar =
           e.clientY >= rect.top + el.clientTop + el.clientHeight &&
           e.clientY <= rect.bottom;
@@ -148,6 +155,9 @@ export default function ReportModal({
     if (type === "REPLACE_TAG") {
       return Boolean(selectedOldTag.trim() && content.trim());
     }
+    if (type === "BROKEN_MEDIA") {
+      return Boolean(brokenUrl.trim());
+    }
     return Boolean(content.trim());
   };
 
@@ -173,6 +183,13 @@ export default function ReportModal({
         action: "REPLACE",
         oldTag: selectedOldTag.trim(),
         newTag: content.trim(),
+      });
+    } else if (type === "BROKEN_MEDIA") {
+      finalType = "BROKEN_MEDIA";
+      finalContent = JSON.stringify({
+        target: brokenTarget,
+        tweetUrl: brokenUrl.trim(),
+        note: brokenNote.trim(),
       });
     }
 
@@ -288,7 +305,7 @@ export default function ReportModal({
             />
           </div>
 
-          {/* 1. CUSTOM ISSUE CATEGORY (Tránh native white alert của Android) */}
+          {/* 1. CUSTOM ISSUE CATEGORY */}
           <div ref={categoryDropdownRef} className="relative">
             <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
               Issue Category
@@ -320,6 +337,8 @@ export default function ReportModal({
                       setIsCharMenuOpen(false);
                       setCharSearch("");
                       setIsCategoryMenuOpen(false);
+                      setBrokenUrl("");
+                      setBrokenNote("");
                     }}
                     className={`w-full text-left px-3.5 py-2.5 text-xs transition cursor-pointer flex items-center justify-between hover:bg-[#1a2b40] ${
                       type === cat.value
@@ -411,7 +430,7 @@ export default function ReportModal({
               </div>
             )}
 
-            {/* REMOVE TAG (Chọn bằng Tag Chips, chống popup hệ thống) */}
+            {/* REMOVE TAG */}
             {type === "REMOVE_TAG" && (
               <div>
                 <label className="block text-xs font-medium text-[#8ba0b2] mb-2">
@@ -571,27 +590,74 @@ export default function ReportModal({
               </div>
             )}
 
-            {/* BROKEN MEDIA / OTHER */}
-            {(type === "BROKEN_MEDIA" || type === "OTHER") && (
-              <div>
-                <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
-                  {type === "BROKEN_MEDIA"
-                    ? "Describe Image Issue:"
-                    : "Details / Feedback:"}
-                </label>
-                <textarea
-                  required
-                  rows={3}
-                  disabled={isSubmitting}
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder={
-                    type === "BROKEN_MEDIA"
-                      ? "Describe which image is broken or missing..."
-                      : "Enter details here..."
-                  }
-                  className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-xl p-3 focus:outline-none transition disabled:opacity-50 resize-none"
-                />
+            {/* BROKEN MEDIA */}
+            {type === "BROKEN_MEDIA" && (
+              <div className="space-y-3.5">
+                {/* 1. Chọn loại ảnh bị lỗi: Ảnh dịch hay Ảnh gốc */}
+                <div>
+                  <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
+                    Select Image Source to Fix:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => setBrokenTarget("TRANSLATED")}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        brokenTarget === "TRANSLATED"
+                          ? "bg-[#3db4f2]/20 border-[#3db4f2] text-[#3db4f2] shadow-[0_0_12px_rgba(61,180,242,0.25)]"
+                          : "bg-[#151f2e] border-[#27364b] hover:border-[#3db4f2]/50 text-[#8ba0b2] hover:text-white"
+                      }`}
+                    >
+                      <span>🌐 Translated Image</span>
+                      {brokenTarget === "TRANSLATED" && <span>✓</span>}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => setBrokenTarget("ORIGINAL")}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        brokenTarget === "ORIGINAL"
+                          ? "bg-[#3db4f2]/20 border-[#3db4f2] text-[#3db4f2] shadow-[0_0_12px_rgba(61,180,242,0.25)]"
+                          : "bg-[#151f2e] border-[#27364b] hover:border-[#3db4f2]/50 text-[#8ba0b2] hover:text-white"
+                      }`}
+                    >
+                      <span>🇯🇵 Original / Raw</span>
+                      {brokenTarget === "ORIGINAL" && <span>✓</span>}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Nhập link Tweet chứa ảnh mới */}
+                <div>
+                  <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
+                    Source Tweet Link (Only works on x.com):
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    disabled={isSubmitting}
+                    value={brokenUrl}
+                    onChange={(e) => setBrokenUrl(e.target.value)}
+                    placeholder="https://x.com/.../status/1845..."
+                    className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-xl px-3.5 py-3 focus:outline-none transition disabled:opacity-50"
+                  />
+                </div>
+
+                {/* 3. Ghi chú thêm (Tuỳ chọn) */}
+                <div>
+                  <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
+                    Additional Notes (Optional):
+                  </label>
+                  <textarea
+                    rows={2}
+                    disabled={isSubmitting}
+                    value={brokenNote}
+                    onChange={(e) => setBrokenNote(e.target.value)}
+                    placeholder="e.g. which page is missing,..."
+                    className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-xl p-3 focus:outline-none transition disabled:opacity-50 resize-none"
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -647,11 +713,11 @@ export default function ReportModal({
           e.stopPropagation();
           setIsOpen(true);
         }}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#151f2e] hover:bg-[#1f2d42] border border-[#27364b] hover:border-[#3db4f2]/60 text-[11px] text-[#8ba0b2] hover:text-[#3db4f2] transition group cursor-pointer active:scale-95"
-        title="Report issue"
+        className="inline-flex items-center justify-center gap-1.5 px-2 md:px-2.5 py-1.5 rounded-xl bg-[#151f2e] hover:bg-[#1f2d42] border border-[#27364b] hover:border-[#3db4f2]/60 text-[11px] text-[#8ba0b2] hover:text-[#3db4f2] transition group cursor-pointer active:scale-95"
+        title="Report / Tags Issue"
       >
         <svg
-          className="w-3.5 h-3.5 text-[#8ba0b2] group-hover:text-[#3db4f2] transition"
+          className="w-3.5 h-3.5 text-[#8ba0b2] group-hover:text-[#3db4f2] transition shrink-0"
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
@@ -663,7 +729,9 @@ export default function ReportModal({
             d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"
           />
         </svg>
-        <span>Report</span>
+
+        {/* Ẩn chữ trên mobile (< 768px), chỉ hiện trên PC (>= 768px) */}
+        <span className="hidden md:inline">Tags/Reports</span>
       </button>
 
       {isOpen && typeof document !== "undefined"

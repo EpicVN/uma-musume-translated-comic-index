@@ -25,6 +25,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const allowedTypes = ["CHARACTER_TAG", "ORIGINAL_LINK", "BROKEN_MEDIA"];
+    if (!allowedTypes.includes(type)) {
+      return NextResponse.json(
+        { error: "Invalid report type." },
+        { status: 400 },
+      );
+    }
+
     // Lấy địa chỉ IP người gửi
     const ipAddress =
       req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
@@ -34,20 +42,17 @@ export async function POST(req: NextRequest) {
     // 2. Kiểm tra Rate Limit (Bỏ qua nếu đặt DISABLE_RATE_LIMIT=true trong .env.local)
     if (process.env.DISABLE_RATE_LIMIT !== "true") {
       const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-      const recentReport = await prisma.comicReport.findFirst({
+      const reportCount = await prisma.comicReport.count({
         where: {
           ipAddress,
           createdAt: { gte: tenMinutesAgo },
         },
       });
 
-      if (recentReport) {
+      if (reportCount >= 3) {
         return NextResponse.json(
-          {
-            error:
-              "You are submitting too fast. Please wait 10 minutes before submitting again.",
-          },
-          { status: 429 }
+          { error: "You can only submit up to 3 reports every 10 minutes." },
+          { status: 429 },
         );
       }
     }
@@ -87,11 +92,21 @@ export async function POST(req: NextRequest) {
       displayType = "Original Tweet Link";
       formattedChange = `🔗 **Twitter Source:** ${report.content}`;
     } else if (report.type === "BROKEN_MEDIA") {
-      displayType = "Broken Image Report";
-      formattedChange = `🖼️ **Description:** ${report.content}`;
-    } else {
-      displayType = "General Feedback";
-      formattedChange = `💬 **Details:** ${report.content}`;
+      displayType = "Broken Image Fix";
+      try {
+        const parsed = JSON.parse(report.content);
+        const targetLabel =
+          parsed.target === "ORIGINAL"
+            ? "🇯🇵 Original / Raw"
+            : "🌐 Translated Image";
+
+        formattedChange =
+          `🎯 **Target:** \`${targetLabel}\`\n` +
+          `🔗 **Source Tweet:** ${parsed.tweetUrl}` +
+          (parsed.note ? `\n📝 **Note:** ${parsed.note}` : "");
+      } catch {
+        formattedChange = `🖼️ **Details:** ${report.content}`;
+      }
     }
 
     // 5. Cấu trúc Payload gửi sang Discord API

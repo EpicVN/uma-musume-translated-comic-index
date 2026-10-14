@@ -270,7 +270,7 @@ export default function ReaderModal({
 
             {/* Tags Slider */}
             {post.tags && post.tags.length > 0 && (
-              <div className="flex items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] py-0.5 max-w-full">
+              <div className="flex items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none py-0.5 max-w-full">
                 {post.tags.map((tag) => (
                   <span
                     key={tag.id || tag.slug || tag.name}

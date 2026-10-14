@@ -9,7 +9,7 @@ const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 20;
 
 interface FilterQuery {
   page: number;

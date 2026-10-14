@@ -27,19 +27,16 @@ export default function TweetGridClient({ posts }: TweetGridClientProps) {
   }, [searchParams, router]);
 
   // 2. Khi click vào Card: Đẩy URL sang /post/[id] kèm toàn bộ query param của bộ lọc
-
   const handleOpenReader = (targetId: string) => {
-    // Lấy toàn bộ chuỗi query hiện tại (?mode=twitter&tag=admire-groove&page=1)
     const currentQuery = searchParams.toString()
       ? `?${searchParams.toString()}`
       : "";
 
-    // Nối currentQuery vào URL
     router.push(`/post/${targetId}${currentQuery}`, { scroll: false });
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4 md:gap-5 items-start">
       {posts.map((post, index) => (
         <TweetGridCard
           key={post.id}
