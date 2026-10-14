@@ -16,7 +16,7 @@ dotenv.config();
 const prisma = new PrismaClient();
 
 interface TranslatorTarget {
-  name: string;
+  name?: string;
   handle: string;
   language: string;
   keywords: string[];
@@ -683,30 +683,45 @@ async function processTranslatorLatest(
   context: BrowserContext,
   target: TranslatorTarget,
 ): Promise<ScrapedResult[]> {
+  const cleanHandle = target.handle.replace(/^@/, "");
+  const translatorHandleWithAt = `@${cleanHandle}`;
+
+  // Log hiển thị rõ cả Tên và @Handle
+  const displayName = target.name || cleanHandle;
   console.log(`\n-------------------------------------------------------`);
-  console.log(`🔍 Checking latest posts: ${target.name} (@${target.handle})`);
+  console.log(
+    `🔍 Checking latest posts: ${displayName} (${translatorHandleWithAt})`,
+  );
 
   const newScrapedPosts: ScrapedResult[] = [];
-  const translatorHandleWithAt = `@${target.handle.replace(/^@/, "")}`;
+
+  // 1. Tìm hoặc tạo Translator: Lấy handle làm gốc
+  // Ưu tiên: Tên trong DB > Tên trong config translators.json > cleanHandle
+  const existingTranslator = await prisma.creator.findUnique({
+    where: { handle: translatorHandleWithAt },
+  });
+
+  const initialName = existingTranslator?.name || target.name || cleanHandle;
 
   const translator = await prisma.creator.upsert({
     where: { handle: translatorHandleWithAt },
     update: {
-      name: target.name,
       isTarget: true,
       filterTags: target.keywords.join(", "),
       role: "TRANSLATOR",
+      // Không ghi đè target.name vào đây để tránh vô tình đè mất tên mới họ vừa đổi trên X
     },
     create: {
       handle: translatorHandleWithAt,
-      name: target.name,
-      profileUrl: `https://x.com/${target.handle.replace(/^@/, "")}`,
+      name: initialName,
+      profileUrl: `https://x.com/${cleanHandle}`,
       isTarget: true,
       filterTags: target.keywords.join(", "),
       role: "TRANSLATOR",
     },
   });
 
+  // 2. Tìm kiếm trên X thuần theo handle (from:username)
   const tweetIdList = await discoverLatestTweetIds(context, target);
   console.log(`   👉 Discovered ${tweetIdList.length} tweet IDs in window.`);
 
@@ -724,6 +739,7 @@ async function processTranslatorLatest(
   );
 
   let skippedCount = 0;
+  let hasSyncedTranslatorName = false;
 
   for (let idx = 0; idx < tweetIdList.length; idx++) {
     const tId = tweetIdList[idx];
@@ -736,7 +752,7 @@ async function processTranslatorLatest(
       continue;
     }
 
-    const transTweetUrl = `https://x.com/${target.handle.replace(/^@/, "")}/status/${tId}`;
+    const transTweetUrl = `https://x.com/${cleanHandle}/status/${tId}`;
 
     let transData: ExtendedTweetData | null = await scrapeTweetMetadata(
       transTweetUrl,
@@ -785,6 +801,25 @@ async function processTranslatorLatest(
 
     if (!transData.hasMedia || !transData.photos?.length) {
       continue;
+    }
+
+    // 🌟 TỰ ĐỘNG CẬP NHẬT DISPLAY NAME NẾU ACC X ĐỔI TÊN MỚI
+    if (
+      !hasSyncedTranslatorName &&
+      transData.name &&
+      transData.name !== "Unknown Artist"
+    ) {
+      if (transData.name !== translator.name) {
+        await prisma.creator.update({
+          where: { id: translator.id },
+          data: { name: transData.name },
+        });
+        console.log(
+          `   🔄 Synced new X display name: "${translator.name}" ➔ "${transData.name}"`,
+        );
+        translator.name = transData.name;
+      }
+      hasSyncedTranslatorName = true;
     }
 
     let originalTweetUrl: string | undefined = transData.quotedTweetUrl;
@@ -837,6 +872,7 @@ async function processTranslatorLatest(
       ? origData.handle
       : `@${origData.handle}`;
 
+    // Artist cũng tự động cập nhật tên mới nhất từ X
     const artist = await prisma.creator.upsert({
       where: { handle: artistHandle },
       update: { name: origData.name, role: "ARTIST" },
@@ -888,17 +924,16 @@ async function processTranslatorLatest(
       },
     });
 
-    // Record newly added comic
     newScrapedPosts.push({
       artistName: origData.name,
-      translatorHandle: target.handle.replace(/^@/, ""),
+      translatorHandle: cleanHandle,
       tweetId: transData.tweetId,
       tweetUrl: transData.tweetUrl,
       imageUrl: transData.photos?.[0] || origData.photos?.[0],
     });
 
     console.log(
-      `   ✅ [New] ${origData.name} ➔ @${target.handle} (${tId}) [${transData.photos?.length || 0} images]`,
+      `   ✅ [New] ${origData.name} ➔ @${cleanHandle} (${tId}) [${transData.photos?.length || 0} images]`,
     );
 
     await sleep(200);
