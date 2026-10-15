@@ -49,9 +49,9 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      if (reportCount >= 3) {
+      if (reportCount >= 10) {
         return NextResponse.json(
-          { error: "You can only submit up to 3 reports every 10 minutes." },
+          { error: "You can only submit up to 10 reports every 10 minutes." },
           { status: 429 },
         );
       }

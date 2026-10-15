@@ -5,6 +5,7 @@ import PageLoadingOverlay from "@/components/PageLoadingOverlay";
 import GlobalToast from "@/components/GlobalToast";
 import Footer from "@/components/Footer";
 import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://uma-index.top"),
@@ -89,6 +90,7 @@ export default function RootLayout({
             {modal} {/* 👈 3. Render modal song song cùng trang nền */}
             <Analytics />
             <GlobalToast />
+            <SpeedInsights />
           </PageLoadingOverlay>
         </div>
 
