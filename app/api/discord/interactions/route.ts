@@ -146,7 +146,7 @@ function formatFriendlyError(err: unknown): {
   };
 }
 
-// GET endpoint kiểm tra kết nối (tránh lỗi 405 trên trình duyệt)
+// GET endpoint kiểm tra kết nối
 export async function GET() {
   return NextResponse.json({
     status: "ok",
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Bắt buộc dùng await vì verifyKey trả về Promise<boolean>
+  // Xác thực chữ ký từ Discord
   const isValid = await verifyKey(
     rawBody,
     signature,
@@ -231,7 +231,7 @@ export async function POST(req: NextRequest) {
     };
 
     // =============================================================
-    // ACTION 1: APPROVE (Sử dụng Defer để chống 3s timeout)
+    // ACTION 1: APPROVE (Sử dụng Atomic Lock & Defer chống 3s timeout)
     // =============================================================
     if (action === "approve") {
       const lock = await prisma.comicReport.updateMany({
@@ -245,14 +245,14 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Nếu count === 0: Nghĩa là đã có Mod khác nhanh tay bấm trước rồi
+      // Nếu count === 0: Đã có Mod khác xử lý trước đó
       if (lock.count === 0) {
         return NextResponse.json({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
             content:
               "⚠️ This report is already being processed or has been completed by another moderator.",
-            flags: 64, // Ephemeral (chỉ mod bấm sau mới thấy thông báo này)
+            flags: 64,
           },
         });
       }
@@ -260,6 +260,11 @@ export async function POST(req: NextRequest) {
       const targetOriginalPostId = await resolveOriginalPostId(report.postId);
 
       if (!targetOriginalPostId) {
+        await prisma.comicReport.update({
+          where: { id: reportId },
+          data: { status: "PENDING", handledBy: null },
+        });
+
         return NextResponse.json({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
@@ -269,28 +274,26 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ⚡ BÁO NGAY CHO DISCORD BIẾT LÀ ĐANG XỬ LÝ (Tắt đếm ngược 3s)
+      // Báo ngay cho Discord tắt bộ đếm timeout 3 giây
       const deferredResponse = NextResponse.json({
         type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE,
       });
 
-      // 🛡️ CHẠY TIẾN TRÌNH CÀO WEB + UPDATE DB Ở BACKGROUND QUA WAITUNTIL
+      // Tiến trình chạy ngầm
       waitUntil(
         (async () => {
           try {
             let appliedDetails = report.content;
 
-            // Xử lý ORIGINAL_LINK
+            // --- 1. Xử lý ORIGINAL_LINK ---
             if (report.type === "ORIGINAL_LINK") {
               const tweetIdMatch = report.content.match(/status\/(\d+)/);
               if (tweetIdMatch) {
                 const tweetId = tweetIdMatch[1];
                 const tweetUrl = `https://x.com/i/status/${tweetId}`;
 
-                // 1. Cào dữ liệu mới từ FxTwitter API
                 const scraped = await scrapeTweetData(tweetUrl);
 
-                // 2. Chuẩn bị data update cho OriginalPost
                 const updateData: Prisma.OriginalPostUpdateInput = {
                   tweetId,
                   tweetUrl,
@@ -298,7 +301,6 @@ export async function POST(req: NextRequest) {
 
                 let artistInfo = "";
 
-                // 👇 3. TỰ ĐỘNG TẠO/CẬP NHẬT TÁC GIẢ (CREATOR) 👇
                 if (scraped?.artistHandle) {
                   const artistHandle = scraped.artistHandle;
                   const artistName = scraped.artistName || artistHandle;
@@ -318,7 +320,6 @@ export async function POST(req: NextRequest) {
                     },
                   });
 
-                  // Liên kết với Artist qua quan hệ "ArtistPosts"
                   updateData.artist = {
                     connect: { id: creator.id },
                   };
@@ -333,7 +334,6 @@ export async function POST(req: NextRequest) {
                   if (scraped.postedAt) updateData.postedAt = scraped.postedAt;
                 }
 
-                // 4. Cập nhật bài gốc
                 await prisma.originalPost.update({
                   where: { id: targetOriginalPostId },
                   data: updateData,
@@ -345,7 +345,6 @@ export async function POST(req: NextRequest) {
                   artistHandle: scraped?.artistHandle,
                 });
 
-                // 5. Báo chi tiết kết quả lên Discord
                 const imgCount = scraped?.mediaUrls.length || 0;
                 appliedDetails = [
                   `Updated Tweet URL: ${tweetUrl}`,
@@ -357,70 +356,109 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            // Xử lý CHARACTER_TAG (ADD / REMOVE / REPLACE)
+            // --- 2. Xử lý CHARACTER_TAG (HỖ TRỢ MULTI-TAG) ---
             else if (report.type === "CHARACTER_TAG") {
-              let tagData = {
-                action: "ADD",
-                tag: report.content.trim(),
-                oldTag: "",
-                newTag: "",
-              };
+              let tagData: {
+                action: string;
+                tags?: string[];
+                tag?: string;
+                oldTag?: string;
+                newTag?: string;
+              } = { action: "ADD" };
 
               try {
-                const parsed = JSON.parse(report.content);
-                if (parsed && typeof parsed === "object") {
-                  tagData = { ...tagData, ...parsed };
-                }
+                tagData = JSON.parse(report.content);
               } catch {
-                // Fallback định dạng cũ
+                tagData = { action: "ADD", tag: report.content.trim() };
               }
 
-              if (tagData.action === "ADD") {
-                const tag = await prisma.tag.upsert({
-                  where: { name: tagData.tag },
-                  update: {},
-                  create: {
-                    name: tagData.tag,
-                    slug: slugify(tagData.tag) || `tag-${Date.now()}`,
-                    category: "CHARACTER",
-                  },
-                });
+              // Trích xuất danh sách tags dạng mảng (hỗ trợ cả tags mới lẫn tag cũ)
+              const targetTags: string[] = Array.isArray(tagData.tags)
+                ? tagData.tags.map((t) => t.trim()).filter(Boolean)
+                : tagData.tag
+                  ? tagData.tag
+                      .split(",")
+                      .map((t) => t.trim())
+                      .filter(Boolean)
+                  : [];
 
-                await prisma.postTag.upsert({
-                  where: {
-                    postId_tagId: {
-                      postId: targetOriginalPostId,
-                      tagId: tag.id,
+              const affectedSlugs: string[] = [];
+
+              // ACTION: ADD TAGS
+              if (tagData.action === "ADD" && targetTags.length > 0) {
+                for (const tagName of targetTags) {
+                  const slug = slugify(tagName) || `tag-${Date.now()}`;
+                  affectedSlugs.push(slug);
+
+                  const tag = await prisma.tag.upsert({
+                    where: { name: tagName },
+                    update: {},
+                    create: {
+                      name: tagName,
+                      slug,
+                      category: "CHARACTER",
                     },
-                  },
-                  update: { isManual: true },
-                  create: {
-                    postId: targetOriginalPostId,
-                    tagId: tag.id,
-                    isManual: true,
-                  },
-                });
+                  });
 
-                appliedDetails = `➕ Added Tag: **${tagData.tag}**`;
-              } else if (tagData.action === "REMOVE") {
-                const tag = await prisma.tag.findUnique({
-                  where: { name: tagData.tag },
-                });
-
-                if (tag) {
-                  await prisma.postTag.deleteMany({
+                  await prisma.postTag.upsert({
                     where: {
+                      postId_tagId: {
+                        postId: targetOriginalPostId,
+                        tagId: tag.id,
+                      },
+                    },
+                    update: { isManual: true },
+                    create: {
                       postId: targetOriginalPostId,
                       tagId: tag.id,
+                      isManual: true,
                     },
                   });
                 }
 
-                appliedDetails = `❌ Removed Tag: **${tagData.tag}**`;
-              } else if (tagData.action === "REPLACE") {
+                appliedDetails = `➕ Added Tag(s): ${targetTags
+                  .map((t) => `**${t}**`)
+                  .join(", ")}`;
+              }
+
+              // ACTION: REMOVE TAGS
+              else if (tagData.action === "REMOVE" && targetTags.length > 0) {
+                for (const tagName of targetTags) {
+                  const slug = slugify(tagName);
+                  if (slug) affectedSlugs.push(slug);
+
+                  const tag = await prisma.tag.findUnique({
+                    where: { name: tagName },
+                  });
+
+                  if (tag) {
+                    await prisma.postTag.deleteMany({
+                      where: {
+                        postId: targetOriginalPostId,
+                        tagId: tag.id,
+                      },
+                    });
+                  }
+                }
+
+                appliedDetails = `❌ Removed Tag(s): ${targetTags
+                  .map((t) => `**${t}**`)
+                  .join(", ")}`;
+              }
+
+              // ACTION: REPLACE TAG (1 - 1)
+              else if (
+                tagData.action === "REPLACE" &&
+                tagData.oldTag &&
+                tagData.newTag
+              ) {
+                if (tagData.oldTag) affectedSlugs.push(slugify(tagData.oldTag));
+                if (tagData.newTag) affectedSlugs.push(slugify(tagData.newTag));
+
                 const oldTag = await prisma.tag.findUnique({
                   where: { name: tagData.oldTag },
                 });
+
                 if (oldTag) {
                   await prisma.postTag.deleteMany({
                     where: {
@@ -430,12 +468,13 @@ export async function POST(req: NextRequest) {
                   });
                 }
 
+                const newSlug = slugify(tagData.newTag) || `tag-${Date.now()}`;
                 const newTag = await prisma.tag.upsert({
                   where: { name: tagData.newTag },
                   update: {},
                   create: {
                     name: tagData.newTag,
-                    slug: slugify(tagData.newTag) || `tag-${Date.now()}`,
+                    slug: newSlug,
                     category: "CHARACTER",
                   },
                 });
@@ -458,26 +497,14 @@ export async function POST(req: NextRequest) {
                 appliedDetails = `🔄 Replaced: **${tagData.oldTag}** ➔ **${tagData.newTag}**`;
               }
 
-              const affectedSlugs: string[] = [];
-
-              if (tagData.action === "ADD" && tagData.tag) {
-                affectedSlugs.push(slugify(tagData.tag));
-              } else if (tagData.action === "REMOVE" && tagData.tag) {
-                affectedSlugs.push(slugify(tagData.tag));
-              } else if (tagData.action === "REPLACE") {
-                if (tagData.oldTag) affectedSlugs.push(slugify(tagData.oldTag));
-                if (tagData.newTag) affectedSlugs.push(slugify(tagData.newTag));
-              }
-
-              // Gọi xóa cache:
               revalidateComicUpdates({
                 postId: report.postId,
                 originalPostId: targetOriginalPostId,
-                characterSlugs: affectedSlugs, // 👈 Xóa cache trang nhân vật tương ứng
+                characterSlugs: affectedSlugs,
               });
             }
 
-            // Xử lý BROKEN_MEDIA (Cào lại ảnh từ Tweet gốc)
+            // --- 3. Xử lý BROKEN_MEDIA ---
             else if (report.type === "BROKEN_MEDIA") {
               let mediaData: {
                 target?: "ORIGINAL" | "TRANSLATED";
@@ -488,7 +515,6 @@ export async function POST(req: NextRequest) {
               try {
                 mediaData = JSON.parse(report.content);
               } catch {
-                // Hỗ trợ fallback nếu trước đó gửi dạng URL thuần
                 mediaData = {
                   target: "TRANSLATED",
                   tweetUrl: report.content.trim(),
@@ -499,7 +525,6 @@ export async function POST(req: NextRequest) {
                 throw new Error("Missing tweet URL to scrape images.");
               }
 
-              // 1. Cào lại dàn ảnh từ link Twitter mới
               const scraped = await scrapeTweetData(mediaData.tweetUrl);
               if (!scraped || scraped.mediaUrls.length === 0) {
                 throw new Error(
@@ -510,7 +535,6 @@ export async function POST(req: NextRequest) {
               const isOriginal = mediaData.target === "ORIGINAL";
 
               if (isOriginal) {
-                // Cập nhật OriginalPost (Ảnh raw gốc)
                 await prisma.originalPost.update({
                   where: { id: targetOriginalPostId },
                   data: {
@@ -522,7 +546,6 @@ export async function POST(req: NextRequest) {
 
                 appliedDetails = `🖼️ **Restored Raw Images:** Replaced with **${scraped.mediaUrls.length}** image(s) from [Tweet](${mediaData.tweetUrl})`;
               } else {
-                // Cập nhật TranslatedPost (Ảnh dịch)
                 const translatedPost = await prisma.translatedPost.findFirst({
                   where: {
                     OR: [
@@ -545,18 +568,14 @@ export async function POST(req: NextRequest) {
 
                 appliedDetails = `🌐 **Restored Translated Images:** Replaced with **${scraped.mediaUrls.length}** image(s) from [Tweet](${mediaData.tweetUrl})`;
               }
+
+              revalidateComicUpdates({
+                postId: report.postId,
+                originalPostId: targetOriginalPostId,
+              });
             }
 
-            // Cập nhật trạng thái báo cáo
-            await prisma.comicReport.update({
-              where: { id: reportId },
-              data: {
-                status: "APPROVED",
-                handledBy: modUsername,
-              },
-            });
-
-            // 📢 GỌI PATCH TỚI DISCORD ĐỂ UPDATE TIN NHẮN GỐC SANG MÀU XANH
+            // Gửi Webhook cập nhật Embed sang màu xanh lá
             await fetch(
               `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
               {
@@ -586,7 +605,7 @@ export async function POST(req: NextRequest) {
                         { name: "Applied Action", value: appliedDetails },
                       ],
                       footer: {
-                        text: "Umazing Index • Status Updated (Click Undo to revert)",
+                        text: "Umazing Index • Status Updated",
                       },
                       timestamp: new Date().toISOString(),
                     },
@@ -597,6 +616,15 @@ export async function POST(req: NextRequest) {
             );
           } catch (err) {
             console.error("Background task error:", err);
+
+            // Rollback trạng thái về PENDING nếu gặp sự cố
+            await prisma.comicReport.update({
+              where: { id: reportId },
+              data: {
+                status: "PENDING",
+                handledBy: null,
+              },
+            });
 
             const { reason, suggestion } = formatFriendlyError(err);
 
@@ -609,7 +637,7 @@ export async function POST(req: NextRequest) {
                   embeds: [
                     {
                       title: `⚠️ Approval Failed: Report #${report.id}`,
-                      color: 0xf59e0b, // Màu hổ phách cảnh báo
+                      color: 0xf59e0b,
                       fields: [
                         {
                           name: "📌 Reason",
@@ -633,12 +661,12 @@ export async function POST(req: NextRequest) {
                         },
                       ],
                       footer: {
-                        text: "Umazing Index • Action aborted to prevent data corruption",
+                        text: "Umazing Index • Action aborted, report restored to PENDING",
                       },
                       timestamp: new Date().toISOString(),
                     },
                   ],
-                  components: [], // Gỡ các nút tương tác
+                  components: [],
                 }),
               },
             );
@@ -650,155 +678,21 @@ export async function POST(req: NextRequest) {
     }
 
     // =============================================================
-    // ACTION 2: UNDO APPROVAL
-    // =============================================================
-    // if (action === "undo") {
-    //   if (report.status !== "APPROVED") {
-    //     return NextResponse.json({
-    //       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-    //       data: {
-    //         content: "⚠️ Only approved reports can be undone.",
-    //         flags: 64,
-    //       },
-    //     });
-    //   }
-
-    //   const targetOriginalPostId = await resolveOriginalPostId(report.postId);
-    //   let revertedDetails = "Reverted applied changes.";
-
-    //   if (report.type === "CHARACTER_TAG" && targetOriginalPostId) {
-    //     let tagData = {
-    //       action: "ADD",
-    //       tag: report.content.trim(),
-    //       oldTag: "",
-    //       newTag: "",
-    //     };
-
-    //     try {
-    //       const parsed = JSON.parse(report.content);
-    //       if (parsed && typeof parsed === "object") {
-    //         tagData = { ...tagData, ...parsed };
-    //       }
-    //     } catch {
-    //       // Fallback
-    //     }
-
-    //     if (tagData.action === "ADD") {
-    //       const tag = await prisma.tag.findUnique({
-    //         where: { name: tagData.tag },
-    //       });
-    //       if (tag) {
-    //         await prisma.postTag.deleteMany({
-    //           where: {
-    //             postId: targetOriginalPostId,
-    //             tagId: tag.id,
-    //           },
-    //         });
-    //       }
-    //       revertedDetails = `Removed added tag: **${tagData.tag}**`;
-    //     } else if (tagData.action === "REMOVE") {
-    //       const tag = await prisma.tag.findUnique({
-    //         where: { name: tagData.tag },
-    //       });
-    //       if (tag) {
-    //         await prisma.postTag.upsert({
-    //           where: {
-    //             postId_tagId: {
-    //               postId: targetOriginalPostId,
-    //               tagId: tag.id,
-    //             },
-    //           },
-    //           update: { isManual: true },
-    //           create: {
-    //             postId: targetOriginalPostId,
-    //             tagId: tag.id,
-    //             isManual: true,
-    //           },
-    //         });
-    //       }
-    //       revertedDetails = `Restored removed tag: **${tagData.tag}**`;
-    //     } else if (tagData.action === "REPLACE") {
-    //       const newTag = await prisma.tag.findUnique({
-    //         where: { name: tagData.newTag },
-    //       });
-    //       if (newTag) {
-    //         await prisma.postTag.deleteMany({
-    //           where: {
-    //             postId: targetOriginalPostId,
-    //             tagId: newTag.id,
-    //           },
-    //         });
-    //       }
-
-    //       const oldTag = await prisma.tag.findUnique({
-    //         where: { name: tagData.oldTag },
-    //       });
-    //       if (oldTag) {
-    //         await prisma.postTag.upsert({
-    //           where: {
-    //             postId_tagId: {
-    //               postId: targetOriginalPostId,
-    //               tagId: oldTag.id,
-    //             },
-    //           },
-    //           update: { isManual: true },
-    //           create: {
-    //             postId: targetOriginalPostId,
-    //             tagId: oldTag.id,
-    //             isManual: true,
-    //           },
-    //         });
-    //       }
-    //       revertedDetails = `Restored **${tagData.oldTag}** and removed **${tagData.newTag}**`;
-    //     }
-    //   }
-
-    //   await prisma.comicReport.update({
-    //     where: { id: reportId },
-    //     data: {
-    //       status: "REJECTED",
-    //       handledBy: `${modUsername} (Undone)`,
-    //     },
-    //   });
-
-    //   revalidatePath("/", "layout");
-
-    //   return NextResponse.json({
-    //     type: InteractionResponseType.UPDATE_MESSAGE,
-    //     data: {
-    //       embeds: [
-    //         {
-    //           title: `↩️ Report #${report.id} - APPROVAL REVERTED`,
-    //           color: 0xef4444,
-    //           description: `This action was revoked by **${modUsername}**.`,
-    //           fields: [
-    //             {
-    //               name: "Original Post ID",
-    //               value: `\`${targetOriginalPostId || report.postId}\``,
-    //               inline: true,
-    //             },
-    //             { name: "Type", value: `\`${report.type}\``, inline: true },
-    //             {
-    //               name: "Reverted By",
-    //               value: `**${modUsername}**`,
-    //               inline: true,
-    //             },
-    //             { name: "Action", value: revertedDetails },
-    //           ],
-    //           footer: { text: "Umazing Index • Status Reverted" },
-    //           timestamp: new Date().toISOString(),
-    //         },
-    //       ],
-    //       components: [],
-    //     },
-    //   });
-    // }
-
-    // =============================================================
-    // ACTION 3: REJECT
+    // ACTION 3: REJECT (Atomic Lock)
     // =============================================================
     if (action === "reject") {
-      if (report.status !== "PENDING") {
+      const lock = await prisma.comicReport.updateMany({
+        where: {
+          id: reportId,
+          status: "PENDING",
+        },
+        data: {
+          status: "REJECTED",
+          handledBy: modUsername,
+        },
+      });
+
+      if (lock.count === 0) {
         return NextResponse.json({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
@@ -807,14 +701,6 @@ export async function POST(req: NextRequest) {
           },
         });
       }
-
-      await prisma.comicReport.update({
-        where: { id: reportId },
-        data: {
-          status: "REJECTED",
-          handledBy: modUsername,
-        },
-      });
 
       return NextResponse.json({
         type: InteractionResponseType.UPDATE_MESSAGE,

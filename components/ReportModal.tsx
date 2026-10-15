@@ -28,8 +28,8 @@ interface ReportModalProps {
 }
 
 const CATEGORIES = [
-  { value: "ADD_TAG", label: "➕ Add Missing Character Tag" },
-  { value: "REMOVE_TAG", label: "❌ Remove Redundant/Wrong Tag" },
+  { value: "ADD_TAG", label: "➕ Add Missing Character Tag(s)" },
+  { value: "REMOVE_TAG", label: "❌ Remove Redundant/Wrong Tag(s)" },
   { value: "REPLACE_TAG", label: "🔄 Replace Incorrect Tag" },
   { value: "ORIGINAL_LINK", label: "🔗 Add / Update Original Twitter Link" },
   { value: "BROKEN_MEDIA", label: "🖼️ Broken / Missing Image" },
@@ -45,6 +45,8 @@ export default function ReportModal({
   const [type, setType] = useState<string>("ADD_TAG");
   const [content, setContent] = useState("");
   const [selectedOldTag, setSelectedOldTag] = useState("");
+  // State lưu danh sách nhiều tag được chọn (Multi-select)
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [honeypot, setHoneypot] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{
@@ -70,11 +72,21 @@ export default function ReportModal({
   const modalRef = useRef<HTMLDivElement>(null);
   const charDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Helper toggle chọn / bỏ chọn tag trong mảng selectedTags
+  const handleToggleTag = (tagName: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tagName)
+        ? prev.filter((t) => t !== tagName)
+        : [...prev, tagName],
+    );
+  };
+
   const handleClose = useCallback(() => {
     if (isSubmitting) return;
     setIsOpen(false);
     setContent("");
     setSelectedOldTag("");
+    setSelectedTags([]);
     setHoneypot("");
     setStatusMessage(null);
     setIsCharMenuOpen(false);
@@ -152,6 +164,9 @@ export default function ReportModal({
   });
 
   const isFormValid = () => {
+    if (type === "ADD_TAG" || type === "REMOVE_TAG") {
+      return selectedTags.length > 0;
+    }
     if (type === "REPLACE_TAG") {
       return Boolean(selectedOldTag.trim() && content.trim());
     }
@@ -173,10 +188,18 @@ export default function ReportModal({
 
     if (type === "ADD_TAG") {
       finalType = "CHARACTER_TAG";
-      finalContent = JSON.stringify({ action: "ADD", tag: content.trim() });
+      finalContent = JSON.stringify({
+        action: "ADD",
+        tags: selectedTags,
+        tag: selectedTags.join(", "),
+      });
     } else if (type === "REMOVE_TAG") {
       finalType = "CHARACTER_TAG";
-      finalContent = JSON.stringify({ action: "REMOVE", tag: content.trim() });
+      finalContent = JSON.stringify({
+        action: "REMOVE",
+        tags: selectedTags,
+        tag: selectedTags.join(", "),
+      });
     } else if (type === "REPLACE_TAG") {
       finalType = "CHARACTER_TAG";
       finalContent = JSON.stringify({
@@ -334,6 +357,7 @@ export default function ReportModal({
                       setType(cat.value);
                       setContent("");
                       setSelectedOldTag("");
+                      setSelectedTags([]);
                       setIsCharMenuOpen(false);
                       setCharSearch("");
                       setIsCategoryMenuOpen(false);
@@ -358,11 +382,11 @@ export default function ReportModal({
 
           {/* 2. DYNAMIC FIELDS */}
           <div>
-            {/* ADD TAG */}
+            {/* ADD TAG (MULTI-SELECT) */}
             {type === "ADD_TAG" && (
               <div>
                 <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
-                  Select Character to Add:
+                  Select Characters to Add ({selectedTags.length} selected):
                 </label>
                 <div ref={charDropdownRef} className="relative">
                   <button
@@ -373,16 +397,21 @@ export default function ReportModal({
                   >
                     <span
                       className={
-                        content ? "text-white font-medium" : "text-[#5a6f82]"
+                        selectedTags.length > 0
+                          ? "text-white font-medium"
+                          : "text-[#5a6f82]"
                       }
                     >
-                      {content || "-- Choose a character from list --"}
+                      {selectedTags.length > 0
+                        ? `${selectedTags.length} character(s) selected`
+                        : "-- Choose characters from list --"}
                     </span>
                     <span className="text-[#8ba0b2] text-[10px] ml-2">
                       {isCharMenuOpen ? "▲" : "▼"}
                     </span>
                   </button>
 
+                  {/* Dropdown danh sách nhân vật (Không đóng khi click để chọn nhiều) */}
                   {isCharMenuOpen && (
                     <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#0e1b2a] border border-[#27364b] rounded-xl shadow-2xl z-60 overflow-hidden flex flex-col">
                       <div className="p-2 border-b border-[#1e2d42] bg-[#132032]">
@@ -397,27 +426,33 @@ export default function ReportModal({
                       </div>
                       <div className="max-h-48 overflow-y-auto divide-y divide-[#1e2d42]/50">
                         {filteredCharacters.length > 0 ? (
-                          filteredCharacters.map((char) => (
-                            <button
-                              type="button"
-                              key={char.slug}
-                              onClick={() => {
-                                setContent(char.name);
-                                setIsCharMenuOpen(false);
-                                setCharSearch("");
-                              }}
-                              className={`w-full text-left px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between hover:bg-[#1a2b40] ${
-                                content === char.name
-                                  ? "bg-[#1f3652] text-[#3db4f2] font-semibold"
-                                  : "text-zinc-200"
-                              }`}
-                            >
-                              <span>{char.name}</span>
-                              <span className="text-[11px] text-[#8ba0b2]">
-                                {char.jp}
-                              </span>
-                            </button>
-                          ))
+                          filteredCharacters.map((char) => {
+                            const isSelected = selectedTags.includes(char.name);
+                            return (
+                              <button
+                                type="button"
+                                key={char.slug}
+                                onClick={() => handleToggleTag(char.name)}
+                                className={`w-full text-left px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between hover:bg-[#1a2b40] ${
+                                  isSelected
+                                    ? "bg-[#1f3652] text-[#3db4f2] font-semibold"
+                                    : "text-zinc-200"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {isSelected && (
+                                    <span className="text-[#3db4f2] text-xs font-bold">
+                                      ✓
+                                    </span>
+                                  )}
+                                  <span>{char.name}</span>
+                                </div>
+                                <span className="text-[11px] text-[#8ba0b2]">
+                                  {char.jp}
+                                </span>
+                              </button>
+                            );
+                          })
                         ) : (
                           <div className="px-3 py-4 text-center text-xs text-[#5a6f82]">
                             No character matched &quot;{charSearch}&quot;
@@ -427,33 +462,59 @@ export default function ReportModal({
                     </div>
                   )}
                 </div>
+
+                {/* Danh sách các tag đã chọn (Chips preview) */}
+                {selectedTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2.5">
+                    {selectedTags.map((tagName) => (
+                      <span
+                        key={tagName}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#3db4f2]/20 border border-[#3db4f2]/50 text-[#3db4f2] text-xs font-semibold shadow-xs"
+                      >
+                        <span>{tagName}</span>
+                        <button
+                          type="button"
+                          disabled={isSubmitting}
+                          onClick={() => handleToggleTag(tagName)}
+                          className="hover:text-rose-400 text-xs font-bold leading-none cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* REMOVE TAG */}
+            {/* REMOVE TAG (MULTI-SELECT) */}
             {type === "REMOVE_TAG" && (
               <div>
                 <label className="block text-xs font-medium text-[#8ba0b2] mb-2">
-                  Select Tag to Remove from Post:
+                  Select Tag(s) to Remove ({selectedTags.length} selected):
                 </label>
                 {currentTags.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {currentTags.map((t) => {
-                      const isSelected = content === t.name;
+                      const isSelected = selectedTags.includes(t.name);
                       return (
                         <button
                           key={t.id || t.name}
                           type="button"
                           disabled={isSubmitting}
-                          onClick={() => setContent(t.name)}
+                          onClick={() => handleToggleTag(t.name)}
                           className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
                             isSelected
-                              ? "bg-rose-500/20 border-rose-500 text-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.3)]"
+                              ? "bg-rose-500/20 border-rose-500 text-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.3)] scale-105"
                               : "bg-[#151f2e] border-[#27364b] hover:border-rose-500/50 text-[#bcbedc]"
                           }`}
                         >
                           <span>🏷️ {t.name}</span>
-                          {isSelected && <span className="text-xs">✕</span>}
+                          {isSelected ? (
+                            <span className="text-xs font-black">✕</span>
+                          ) : (
+                            <span className="text-xs text-[#5a6f82]">+</span>
+                          )}
                         </button>
                       );
                     })}
@@ -466,7 +527,7 @@ export default function ReportModal({
               </div>
             )}
 
-            {/* REPLACE TAG */}
+            {/* REPLACE TAG (1 - 1) */}
             {type === "REPLACE_TAG" && (
               <div className="space-y-4">
                 <div>
@@ -593,7 +654,6 @@ export default function ReportModal({
             {/* BROKEN MEDIA */}
             {type === "BROKEN_MEDIA" && (
               <div className="space-y-3.5">
-                {/* 1. Chọn loại ảnh bị lỗi: Ảnh dịch hay Ảnh gốc */}
                 <div>
                   <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
                     Select Image Source to Fix:
@@ -628,7 +688,6 @@ export default function ReportModal({
                   </div>
                 </div>
 
-                {/* 2. Nhập link Tweet chứa ảnh mới */}
                 <div>
                   <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
                     Source Tweet Link (Only works on x.com):
@@ -644,7 +703,6 @@ export default function ReportModal({
                   />
                 </div>
 
-                {/* 3. Ghi chú thêm (Tuỳ chọn) */}
                 <div>
                   <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
                     Additional Notes (Optional):

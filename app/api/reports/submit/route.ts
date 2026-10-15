@@ -75,12 +75,27 @@ export async function POST(req: NextRequest) {
     if (report.type === "CHARACTER_TAG") {
       try {
         const parsed = JSON.parse(report.content);
+
+        // Hỗ trợ cả mảng `tags` mới và chuỗi `tag` cũ
+        const tagsList: string[] = Array.isArray(parsed.tags)
+          ? parsed.tags
+          : parsed.tag
+            ? parsed.tag
+                .split(",")
+                .map((s: string) => s.trim())
+                .filter(Boolean)
+            : [];
+
+        const tagsFormatted = tagsList
+          .map((t: string) => `\`${t}\``)
+          .join(", ");
+
         if (parsed.action === "ADD") {
-          displayType = "Add Missing Tag";
-          formattedChange = `➕ **Add Character:** \`${parsed.tag}\``;
+          displayType = `Add Missing Tag(s) [${tagsList.length}]`;
+          formattedChange = `➕ **Add Character(s):** ${tagsFormatted}`;
         } else if (parsed.action === "REMOVE") {
-          displayType = "Remove Redundant Tag";
-          formattedChange = `❌ **Remove Character:** \`${parsed.tag}\``;
+          displayType = `Remove Redundant Tag(s) [${tagsList.length}]`;
+          formattedChange = `❌ **Remove Character(s):** ${tagsFormatted}`;
         } else if (parsed.action === "REPLACE") {
           displayType = "Replace Incorrect Tag";
           formattedChange = `🔄 **Replace:** \`${parsed.oldTag}\` ➔ \`${parsed.newTag}\``;
