@@ -4,7 +4,7 @@ import NextTopLoader from "nextjs-toploader";
 import PageLoadingOverlay from "@/components/PageLoadingOverlay";
 import GlobalToast from "@/components/GlobalToast";
 import Footer from "@/components/Footer";
-import { Analytics } from "@vercel/analytics/react";
+// import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
@@ -88,7 +88,7 @@ export default function RootLayout({
           <PageLoadingOverlay>
             {children}
             {modal} {/* 👈 3. Render modal song song cùng trang nền */}
-            <Analytics />
+            {/* <Analytics /> */}
             <GlobalToast />
             <SpeedInsights />
           </PageLoadingOverlay>

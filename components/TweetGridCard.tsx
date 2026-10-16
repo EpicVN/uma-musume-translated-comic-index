@@ -80,6 +80,7 @@ export default function TweetGridCard({
             href={`/post/${origId}${currentQuery}`}
             scroll={false}
             className="block w-full h-full relative"
+            prefetch={false}
           >
             {displayThumbnail ? (
               <Image
@@ -212,6 +213,7 @@ export default function TweetGridCard({
           href={`/post/${origId}${currentQuery}`}
           scroll={false}
           className="group block"
+          prefetch={false}
         >
           {displayThumbnail ? (
             <Image
