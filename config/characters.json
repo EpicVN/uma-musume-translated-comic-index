@@ -1811,5 +1811,56 @@
             "hosoe",
             "junko"
         ]
+    },
+    {
+        "slug": "dicta-striker",
+        "name": "Dicta Striker",
+        "jp": "ディクタストライカ",
+        "aliases": [
+            "dicta",
+            "striker",
+            "Dikuta"
+        ]
+    },
+    {
+        "slug": "rudy-lemono",
+        "name": "Rudy Lemono",
+        "jp": "ルディレモーノ",
+        "aliases": [
+            "rudy",
+            "lemono"
+        ]
+    },
+    {
+        "slug": "norn-ace",
+        "name": "Norn Ace",
+        "jp": "ノルンエース",
+        "aliases": [
+            "norn"
+        ]
+    },
+    {
+        "slug": "fujimasa-march",
+        "name": "Fujimasa March",
+        "jp": "フジマサマーチ",
+        "aliases": [
+            "fujimasa"
+        ]
+    },
+    {
+        "slug": "belno-light",
+        "name": "Belno Light",
+        "jp": "ベルノライト",
+        "aliases": [
+            "belno"
+        ]
+    },
+    {
+        "slug": "obey-your-master",
+        "name": "Obey Your Master",
+        "jp": "オベイユアマスタ",
+        "aliases": [
+            "obey your master"
+        ]
     }
 ]
