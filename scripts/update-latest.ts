@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { scrapeTweetMetadata, TweetData } from "../lib/scraper";
 import { autoTagPost } from "../lib/tagger";
 import { BrowserContext, Page, Response } from "playwright";
@@ -94,6 +94,42 @@ const EXCLUDED_LANG_KEYWORDS = [
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function handleUnknownOriginalPost(
+  prisma: PrismaClient,
+  transData: ExtendedTweetData,
+): Promise<string> {
+  // 1. Tạo hoặc lấy Artist "Unknown"
+  const unknownArtist = await prisma.creator.upsert({
+    where: { handle: "@unknown" },
+    update: {},
+    create: {
+      handle: "@unknown",
+      name: "Unknown Artist",
+      profileUrl: "https://x.com",
+      role: "ARTIST",
+    },
+  });
+
+  // 2. Tạo bản ghi bài gốc giả lập với tweetId có tiền tố 'unknown-'
+  const placeholderTweetId = `unknown-${transData.tweetId}`;
+  const originalPost = await prisma.originalPost.upsert({
+    where: { tweetId: placeholderTweetId },
+    update: {
+      content: transData.text || "",
+    },
+    create: {
+      tweetId: placeholderTweetId,
+      tweetUrl: transData.tweetUrl,
+      postedAt: parseValidDate(transData.postedAt, transData.tweetId),
+      content: "Original post not found or not a quote tweet.",
+      mediaUrls: [], // Mảng rỗng (không có ảnh gốc)
+      artistId: unknownArtist.id,
+    },
+  });
+
+  return originalPost.id;
+}
+
 // --- DISCORD WEBHOOK INTEGRATION ---
 async function sendDiscordNotification(posts: ScrapedResult[]) {
   const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
@@ -111,7 +147,6 @@ async function sendDiscordNotification(posts: ScrapedResult[]) {
 
   try {
     // Discord enforces a maximum of 10 embeds per message.
-    // Split the array into batches of up to 10 posts each.
     const CHUNK_SIZE = 10;
     const batches: ScrapedResult[][] = [];
     for (let i = 0; i < posts.length; i += CHUNK_SIZE) {
@@ -134,7 +169,6 @@ async function sendDiscordNotification(posts: ScrapedResult[]) {
         };
       });
 
-      // Header message only on the first batch
       const content =
         index === 0
           ? `✅ **Update Complete!** Found and saved **${posts.length}** new translated comic(s).`
@@ -158,7 +192,6 @@ async function sendDiscordNotification(posts: ScrapedResult[]) {
         );
       }
 
-      // Small pause to avoid hitting Discord rate limits between consecutive messages
       if (index < batches.length - 1) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
@@ -484,9 +517,19 @@ async function scrapeNSFWWithBrowser(
       const art = document.querySelector('article[data-testid="tweet"]');
       if (!art) return null;
 
-      const userBlock = art.querySelector('[data-testid="User-Name"]');
+      // Tránh lấy nhầm User-Name bên trong block Quote Tweet
+      const quoteBlock = art.querySelector(
+        '[data-testid="quoteTweet"], [data-testid="tweetQuote"]',
+      );
+      const allUserBlocks = Array.from(
+        art.querySelectorAll('[data-testid="User-Name"]'),
+      );
+      const userBlock =
+        allUserBlocks.find((ub) => !quoteBlock || !quoteBlock.contains(ub)) ||
+        allUserBlocks[0];
+
       const name =
-        userBlock?.querySelector("span")?.textContent || "Unknown Artist";
+        userBlock?.querySelector("span")?.textContent?.trim() || "Unknown";
 
       let handle = "@unknown";
       const profileLinks = Array.from(
@@ -495,12 +538,9 @@ async function scrapeNSFWWithBrowser(
       for (const link of profileLinks) {
         const href = link.getAttribute("href") || "";
         if (!href.includes("/status") && !href.includes("/analytics")) {
-          const cleanHandle = href
-            .replace(/^\//, "")
-            .split("/")[0]
-            .split("?")[0];
-          if (cleanHandle) {
-            handle = `@${cleanHandle}`;
+          const clean = href.replace(/^\//, "").split("/")[0].split("?")[0];
+          if (clean) {
+            handle = `@${clean}`;
             break;
           }
         }
@@ -516,8 +556,14 @@ async function scrapeNSFWWithBrowser(
         }
       }
 
-      const textEl = art.querySelector('[data-testid="tweetText"]');
-      const text = textEl?.textContent || "";
+      // Trích xuất văn bản chính (không lấy text trong quote)
+      const allTextEls = Array.from(
+        art.querySelectorAll('[data-testid="tweetText"]'),
+      );
+      const mainTextEl =
+        allTextEls.find((el) => !quoteBlock || !quoteBlock.contains(el)) ||
+        allTextEls[0];
+      const text = mainTextEl?.textContent || "";
 
       const timeEl = art.querySelector("time");
       const postedAt =
@@ -525,8 +571,13 @@ async function scrapeNSFWWithBrowser(
         document.querySelector("article time")?.getAttribute("datetime") ||
         new Date().toISOString();
 
+      // Chỉ lấy ảnh thuộc bài chính (loại trừ ảnh của bài được trích dẫn)
       const photos: string[] = [];
-      art.querySelectorAll('img[src*="pbs.twimg.com/media"]').forEach((img) => {
+      const images = Array.from(
+        art.querySelectorAll('img[src*="pbs.twimg.com/media"]'),
+      );
+      images.forEach((img) => {
+        if (quoteBlock && quoteBlock.contains(img)) return;
         const src = img.getAttribute("src");
         if (src) {
           const highRes = src.replace(/name=[a-zA-Z0-9]+/, "name=orig");
@@ -616,20 +667,36 @@ async function discoverLatestTweetIds(
     let emptyScrollCount = 0;
 
     for (let scroll = 1; scroll <= 10; scroll++) {
-      const tweetsOnPage = await page.evaluate(() => {
+      const tweetsOnPage = await page.evaluate((targetHandle) => {
         const articles = Array.from(
           document.querySelectorAll('article[data-testid="tweet"]'),
         );
         const results: { id: string; datetime?: string; text: string }[] = [];
 
         articles.forEach((art) => {
+          // Bỏ qua bài Repost / Retweet
+          const socialContext = art.querySelector(
+            '[data-testid="socialContext"]',
+          );
+          if (
+            socialContext &&
+            socialContext.textContent?.toLowerCase().includes("repost")
+          ) {
+            return;
+          }
+
           const link = art.querySelector('a[href*="/status/"]');
           const timeEl = art.querySelector("time");
           const textEl = art.querySelector('[data-testid="tweetText"]');
 
           if (link) {
             const href = link.getAttribute("href") || "";
-            const match = href.match(/\/status\/(\d+)/);
+
+            // Kiểm tra link tweet bằng targetHandle đã được truyền vào
+            const match = href.match(
+              new RegExp(`^\\/${targetHandle}\\/status\\/(\\d+)`, "i"),
+            );
+
             if (match) {
               results.push({
                 id: match[1],
@@ -640,7 +707,7 @@ async function discoverLatestTweetIds(
           }
         });
         return results;
-      });
+      }, cleanHandle);
 
       const prevSize = discoveredIds.size;
 
@@ -686,7 +753,6 @@ async function processTranslatorLatest(
   const cleanHandle = target.handle.replace(/^@/, "");
   const translatorHandleWithAt = `@${cleanHandle}`;
 
-  // Log hiển thị rõ cả Tên và @Handle
   const displayName = target.name || cleanHandle;
   console.log(`\n-------------------------------------------------------`);
   console.log(
@@ -696,7 +762,6 @@ async function processTranslatorLatest(
   const newScrapedPosts: ScrapedResult[] = [];
 
   // 1. Tìm hoặc tạo Translator: Lấy handle làm gốc
-  // Ưu tiên: Tên trong DB > Tên trong config translators.json > cleanHandle
   const existingTranslator = await prisma.creator.findUnique({
     where: { handle: translatorHandleWithAt },
   });
@@ -709,7 +774,6 @@ async function processTranslatorLatest(
       isTarget: true,
       filterTags: target.keywords.join(", "),
       role: "TRANSLATOR",
-      // Không ghi đè target.name vào đây để tránh vô tình đè mất tên mới họ vừa đổi trên X
     },
     create: {
       handle: translatorHandleWithAt,
@@ -803,25 +867,48 @@ async function processTranslatorLatest(
       continue;
     }
 
-    // 🌟 TỰ ĐỘNG CẬP NHẬT DISPLAY NAME NẾU ACC X ĐỔI TÊN MỚI
+    const authorHandle = (transData.handle || "")
+      .replace(/^@/, "")
+      .trim()
+      .toLowerCase();
+
+    if (authorHandle && authorHandle !== cleanHandle.toLowerCase()) {
+      console.log(
+        `   ⏭️ [Skip Repost] ID ${tId} is authored by @${authorHandle}, not @${cleanHandle}. Skipping...`,
+      );
+      skippedCount++;
+      continue; // Bỏ qua ngay, không sync tên và không lưu vào DB
+    }
+
+    // 🌟 CHỐT CHẶN AN TOÀN: Chỉ cập nhật tên Translator nếu handle khớp chính xác
+    const cleanScrapedHandle = (transData.handle || "")
+      .replace(/^@/, "")
+      .toLowerCase();
+    const isTargetHandle = cleanScrapedHandle === cleanHandle.toLowerCase();
+
     if (
       !hasSyncedTranslatorName &&
+      isTargetHandle &&
       transData.name &&
-      transData.name !== "Unknown Artist"
+      transData.name !== "Unknown" &&
+      transData.name !== "Unknown Artist" &&
+      transData.name !== "Unknown Translator"
     ) {
-      if (transData.name !== translator.name) {
+      const cleanName = transData.name.trim();
+      if (cleanName && cleanName !== translator.name) {
         await prisma.creator.update({
           where: { id: translator.id },
-          data: { name: transData.name },
+          data: { name: cleanName },
         });
         console.log(
-          `   🔄 Synced new X display name: "${translator.name}" ➔ "${transData.name}"`,
+          `   🔄 Synced new X display name: "${translator.name}" ➔ "${cleanName}"`,
         );
-        translator.name = transData.name;
+        translator.name = cleanName;
       }
       hasSyncedTranslatorName = true;
     }
 
+    // --- TÌM LINK BÀI GỐC CỦA ARTIST ---
     let originalTweetUrl: string | undefined = transData.quotedTweetUrl;
 
     if (!originalTweetUrl) {
@@ -844,73 +931,93 @@ async function processTranslatorLatest(
       );
     }
 
-    if (!originalTweetUrl) {
-      console.log(
-        `   ⚠️ [${idx + 1}/${tweetIdList.length}] ID ${tId}: Original artist tweet URL not found`,
+    let originalPostId: string;
+    let fallbackArtistName = "Unknown Artist";
+
+    // NẾU TÌM THẤY BÀI GỐC -> TIẾN HÀNH CÀO BÌNH THƯỜNG
+    if (originalTweetUrl) {
+      let origData: ExtendedTweetData | null = await scrapeTweetMetadata(
+        originalTweetUrl,
+        false,
       );
-      continue;
-    }
 
-    let origData: ExtendedTweetData | null = await scrapeTweetMetadata(
-      originalTweetUrl,
-      false,
-    );
+      if (!origData || !origData.photos?.length) {
+        console.log(
+          `   🔞 Scraping original tweet photos via browser (NSFW)...`,
+        );
+        origData = await scrapeNSFWWithBrowser(context, originalTweetUrl);
+      }
 
-    if (!origData || !origData.photos?.length) {
-      console.log(`   🔞 Scraping original tweet photos via browser (NSFW)...`);
-      origData = await scrapeNSFWWithBrowser(context, originalTweetUrl);
-    }
+      if (origData) {
+        const artistHandle = origData.handle.startsWith("@")
+          ? origData.handle
+          : `@${origData.handle}`;
 
-    if (!origData) {
+        const validArtistName =
+          origData.name &&
+          origData.name !== "Unknown" &&
+          origData.name !== "Unknown Artist"
+            ? origData.name.trim()
+            : undefined;
+
+        fallbackArtistName = validArtistName || artistHandle;
+
+        const artist = await prisma.creator.upsert({
+          where: { handle: artistHandle },
+          update: {
+            role: "ARTIST",
+            ...(validArtistName ? { name: validArtistName } : {}),
+          },
+          create: {
+            handle: artistHandle,
+            name: validArtistName || artistHandle,
+            profileUrl: `https://x.com/${artistHandle.replace("@", "")}`,
+            role: "ARTIST",
+          },
+        });
+
+        const originalPost = await prisma.originalPost.upsert({
+          where: { tweetId: origData.tweetId },
+          update: {
+            content: origData.text || "",
+            mediaUrls: origData.photos || [],
+            artistId: artist.id,
+          },
+          create: {
+            tweetId: origData.tweetId,
+            tweetUrl: origData.tweetUrl,
+            postedAt: parseValidDate(origData.postedAt, origData.tweetId),
+            content: origData.text || "",
+            mediaUrls: origData.photos || [],
+            artistId: artist.id,
+          },
+        });
+
+        originalPostId = originalPost.id;
+        const combinedText = `${transData.text || ""} ${origData.text || ""}`;
+        await autoTagPost(prisma, originalPost.id, combinedText);
+      } else {
+        // Có link nhưng không cào được nội dung tweet gốc
+        originalPostId = await handleUnknownOriginalPost(prisma, transData);
+      }
+    } else {
+      // 🌟 KHÔNG PHẢI QUOTE / KHÔNG TÌM THẤY TWEET GỐC -> GÁN UNKNOWN
       console.log(
-        `   ⚠️ [${idx + 1}/${tweetIdList.length}] ID ${tId}: Failed to extract original post metadata`,
+        `   ⚠️ [${idx + 1}/${tweetIdList.length}] ID ${tId}: Not a quote tweet. Fallback to Unknown Artist.`,
       );
-      continue;
+      originalPostId = await handleUnknownOriginalPost(prisma, transData);
+      await autoTagPost(prisma, originalPostId, transData.text || "");
     }
 
-    const artistHandle = origData.handle.startsWith("@")
-      ? origData.handle
-      : `@${origData.handle}`;
-
-    // Artist cũng tự động cập nhật tên mới nhất từ X
-    const artist = await prisma.creator.upsert({
-      where: { handle: artistHandle },
-      update: { name: origData.name, role: "ARTIST" },
-      create: {
-        handle: artistHandle,
-        name: origData.name,
-        profileUrl: `https://x.com/${artistHandle.replace("@", "")}`,
-        role: "ARTIST",
-      },
-    });
-
-    const originalPost = await prisma.originalPost.upsert({
-      where: { tweetId: origData.tweetId },
-      update: {
-        content: origData.text || "",
-        mediaUrls: origData.photos || [],
-        artistId: artist.id,
-      },
-      create: {
-        tweetId: origData.tweetId,
-        tweetUrl: origData.tweetUrl,
-        postedAt: parseValidDate(origData.postedAt, origData.tweetId),
-        content: origData.text || "",
-        mediaUrls: origData.photos || [],
-        artistId: artist.id,
-      },
-    });
-
-    const combinedText = `${transData.text || ""} ${origData.text || ""}`;
-    await autoTagPost(prisma, originalPost.id, combinedText);
-
+    // LƯU BÀI DỊCH BÌNH THƯỜNG VÀO DATABASE
     await prisma.translatedPost.upsert({
       where: { tweetId: transData.tweetId },
       update: {
         content: transData.text || "",
         mediaUrls: transData.photos || [],
         postedAt: parseValidDate(transData.postedAt, transData.tweetId),
-        originalPostId: originalPost.id,
+        translatorId: translator.id,
+        originalPostId: originalPostId, // Gắn ID bài gốc (chuẩn hoặc unknown)
       },
       create: {
         tweetId: transData.tweetId,
@@ -920,20 +1027,25 @@ async function processTranslatorLatest(
         mediaUrls: transData.photos || [],
         postedAt: parseValidDate(transData.postedAt, transData.tweetId),
         translatorId: translator.id,
-        originalPostId: originalPost.id,
+        originalPostId: originalPostId,
       },
     });
 
     newScrapedPosts.push({
-      artistName: origData.name,
+      artistName: fallbackArtistName,
       translatorHandle: cleanHandle,
       tweetId: transData.tweetId,
       tweetUrl: transData.tweetUrl,
-      imageUrl: transData.photos?.[0] || origData.photos?.[0],
+      imageUrl: transData.photos?.[0],
     });
 
+    // Hiển thị trực quan trạng thái cào: nếu không tìm thấy bài gốc sẽ gắn tag cảnh báo
+    const isUnknown = fallbackArtistName === "Unknown Artist";
+    const artistDisplay = isUnknown ? "❓ Unknown Artist" : fallbackArtistName;
+    const sourceStatus = isUnknown ? " [No Quote/Fallback]" : "";
+
     console.log(
-      `   ✅ [New] ${origData.name} ➔ @${cleanHandle} (${tId}) [${transData.photos?.length || 0} images]`,
+      `   ✅ [New] ${artistDisplay} ➔ @${cleanHandle} (${tId}) [${transData.photos?.length || 0} images]${sourceStatus}`,
     );
 
     await sleep(200);
@@ -1046,7 +1158,7 @@ async function runQuickUpdate() {
 
   await browser.close();
 
-  // Send aggregated report to Discord
+  // Gửi báo cáo tổng hợp tới Discord
   if (totalNewPosts.length > 0) {
     await sendDiscordNotification(totalNewPosts);
   }
