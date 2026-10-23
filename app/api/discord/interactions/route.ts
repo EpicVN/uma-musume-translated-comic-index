@@ -304,7 +304,7 @@ export async function POST(req: NextRequest) {
 
             let appliedDetails = report.content;
 
-            // --- 1. Xử lý ORIGINAL_LINK ---
+            // --- 1. XỬ LÝ ORIGINAL_LINK (RE-LINK HOẶC CẬP NHẬT) ---
             if (report.type === "ORIGINAL_LINK") {
               const tweetIdMatch = report.content.match(/status\/(\d+)/);
               if (tweetIdMatch) {
@@ -312,11 +312,8 @@ export async function POST(req: NextRequest) {
                 const tweetUrl = `https://x.com/i/status/${tweetId}`;
                 const scraped = await scrapeTweetData(tweetUrl);
 
-                const updateData: Prisma.OriginalPostUpdateInput = {
-                  tweetId,
-                  tweetUrl,
-                };
-
+                // 1. Đồng bộ / upsert thông tin Artist nếu cào được
+                let artistId: string | undefined = undefined;
                 let artistInfo = "";
 
                 if (scraped?.artistHandle) {
@@ -335,31 +332,102 @@ export async function POST(req: NextRequest) {
                     },
                   });
 
-                  updateData.artist = { connect: { id: creator.id } };
+                  artistId = creator.id;
                   artistInfo = `Artist: **${artistName}** (\`@${artistHandle}\`)`;
                 }
 
-                if (scraped && scraped.mediaUrls.length > 0) {
-                  updateData.mediaUrls = scraped.mediaUrls;
-                  updateData.mediaCount = scraped.mediaUrls.length;
-                  if (scraped.text) updateData.content = scraped.text;
-                  if (scraped.postedAt) updateData.postedAt = scraped.postedAt;
+                // 2. Kiểm tra xem tweetId của bài gốc này đã từng tồn tại trong DB chưa
+                const existingOriginalPost =
+                  await prisma.originalPost.findUnique({
+                    where: { tweetId },
+                  });
+
+                let finalOriginalPostId = targetOriginalPostId;
+
+                if (existingOriginalPost) {
+                  // === TRƯỜNG HỢP A: BÀI GỐC ĐÃ TỒN TẠI TRƯỚC ĐÓ ===
+                  finalOriginalPostId = existingOriginalPost.id;
+
+                  // Chuyển bản dịch trỏ sang bài gốc đã có sẵn
+                  await prisma.translatedPost.updateMany({
+                    where: {
+                      OR: [
+                        { id: report.postId },
+                        { originalPostId: targetOriginalPostId },
+                      ],
+                    },
+                    data: {
+                      originalPostId: existingOriginalPost.id,
+                    },
+                  });
+
+                  // Cập nhật bổ sung ảnh/nội dung cho bài gốc đã có nếu trước đó bị thiếu
+                  if (scraped && scraped.mediaUrls.length > 0) {
+                    await prisma.originalPost.update({
+                      where: { id: existingOriginalPost.id },
+                      data: {
+                        mediaUrls: scraped.mediaUrls,
+                        mediaCount: scraped.mediaUrls.length,
+                        ...(scraped.text ? { content: scraped.text } : {}),
+                        ...(scraped.postedAt
+                          ? { postedAt: scraped.postedAt }
+                          : {}),
+                        ...(artistId ? { artistId } : {}),
+                      },
+                    });
+                  }
+
+                  // Dọn dẹp bài gốc rác (ví dụ bài tạm unknown-) nếu không còn bản dịch nào bám vào
+                  if (targetOriginalPostId !== existingOriginalPost.id) {
+                    const remaining = await prisma.translatedPost.count({
+                      where: { originalPostId: targetOriginalPostId },
+                    });
+
+                    if (remaining === 0) {
+                      await prisma.postTag.deleteMany({
+                        where: { postId: targetOriginalPostId },
+                      });
+                      await prisma.originalPost
+                        .delete({ where: { id: targetOriginalPostId } })
+                        .catch(() => {});
+                    }
+                  }
+                } else {
+                  // === TRƯỜNG HỢP B: BÀI GỐC CHƯA CÓ TRONG DB (UPDATE BÌNH THƯỜNG) ===
+                  const updateData: Prisma.OriginalPostUpdateInput = {
+                    tweetId,
+                    tweetUrl,
+                    ...(artistId
+                      ? { artist: { connect: { id: artistId } } }
+                      : {}),
+                  };
+
+                  if (scraped && scraped.mediaUrls.length > 0) {
+                    updateData.mediaUrls = scraped.mediaUrls;
+                    updateData.mediaCount = scraped.mediaUrls.length;
+                    if (scraped.text) updateData.content = scraped.text;
+                    if (scraped.postedAt)
+                      updateData.postedAt = scraped.postedAt;
+                  }
+
+                  await prisma.originalPost.update({
+                    where: { id: targetOriginalPostId },
+                    data: updateData,
+                  });
                 }
 
-                await prisma.originalPost.update({
-                  where: { id: targetOriginalPostId },
-                  data: updateData,
-                });
-
+                // 3. Xóa cache Next.js với ID bài gốc chính xác
                 revalidateComicUpdates({
                   postId: report.postId,
-                  originalPostId: targetOriginalPostId,
+                  originalPostId: finalOriginalPostId,
                   artistHandle: scraped?.artistHandle,
                 });
 
                 const imgCount = scraped?.mediaUrls.length || 0;
                 appliedDetails = [
-                  `Updated Tweet URL: ${tweetUrl}`,
+                  existingOriginalPost
+                    ? `🔗 Linked to Existing Original Post (\`${finalOriginalPostId}\`)`
+                    : `Updated Tweet URL: ${tweetUrl}`,
                   artistInfo,
                   imgCount > 0 ? `Fetched **${imgCount}** raw image(s)` : "",
                 ]
