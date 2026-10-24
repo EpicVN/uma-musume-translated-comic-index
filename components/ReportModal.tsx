@@ -22,6 +22,8 @@ interface TagItem {
 
 interface ReportModalProps {
   postId: string;
+  origId?: string;
+  transId?: string;
   postTitle?: string;
   thumbnailUrl?: string;
   currentTags?: TagItem[];
@@ -37,6 +39,8 @@ const CATEGORIES = [
 
 export default function ReportModal({
   postId,
+  origId,
+  transId,
   postTitle,
   thumbnailUrl,
   currentTags = [],
@@ -222,6 +226,8 @@ export default function ReportModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           postId,
+          origId,
+          transId,
           type: finalType,
           content: finalContent,
           honeypot,

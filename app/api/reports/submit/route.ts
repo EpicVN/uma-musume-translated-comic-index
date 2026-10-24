@@ -11,7 +11,15 @@ const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.uma-index.top";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { postId, type, content, honeypot } = body;
+    // 🌟 1. Nhận thêm origId và transId từ body nếu client gửi lên
+    const {
+      postId,
+      origId: bodyOrigId,
+      transId: bodyTransId,
+      type,
+      content,
+      honeypot,
+    } = body;
 
     // 1. Chống Spam Bot bằng trường ẩn Honeypot
     if (honeypot) {
@@ -68,23 +76,46 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 4. Tạo URL bài viết chuẩn theo Cách 2 (/post/[origId]?tl=[transId])
+    // 🌟 4. Truy vấn mở rộng để tìm bài dịch bất kể postId là ID dịch hay ID gốc
     const targetPost = await prisma.translatedPost.findFirst({
       where: {
-        OR: [{ id: postId }, { tweetId: postId }],
+        OR: [
+          { id: postId },
+          { tweetId: postId },
+          { originalPostId: postId },
+          { originalPost: { tweetId: postId } },
+        ],
       },
       select: {
         id: true,
+        tweetId: true,
         originalPostId: true,
-        originalPost: { select: { id: true } },
+        originalPost: {
+          select: {
+            id: true,
+            tweetId: true,
+          },
+        },
       },
     });
 
-    const origId = targetPost?.originalPost?.id || targetPost?.originalPostId;
+    // Xác định ID bài gốc (ưu tiên body -> DB originalPost)
+    const origId =
+      bodyOrigId ||
+      targetPost?.originalPost?.id ||
+      targetPost?.originalPost?.tweetId ||
+      targetPost?.originalPostId;
+
+    // Xác định ID bài dịch (ưu tiên body -> DB translatedPost)
+    const transId = bodyTransId || targetPost?.tweetId || targetPost?.id;
+
+    // Tạo link chuẩn URL Schema mới: /post/[origId]?tl=[transId]
     const comicLink =
-      targetPost && origId
-        ? `${baseUrl}/post/${origId}?tl=${targetPost.id}`
-        : `${baseUrl}/post/${postId}`;
+      origId && transId
+        ? `${baseUrl}/post/${origId}?tl=${transId}`
+        : origId
+          ? `${baseUrl}/post/${origId}`
+          : `${baseUrl}/post/${postId}`;
 
     // 5. Định dạng nội dung hiển thị thân thiện, dễ đọc cho Mod trên Discord
     let displayType = report.type.replace("_", " ");
