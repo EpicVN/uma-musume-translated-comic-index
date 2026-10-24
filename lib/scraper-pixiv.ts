@@ -108,7 +108,7 @@ export async function scrapePixivMetadata(
       profileUrl: `https://www.pixiv.net/users/${body.userId}`,
       postedAt: body.createDate || new Date().toISOString(),
       pageCount,
-      mediaUrls: safeMediaUrls,
+      mediaUrls: originalPhotos, // Lưu thẳng mảng URL gốc "https://i.pximg.net/..."
     };
   } catch (err) {
     console.error(`[Pixiv Scraper Error] ${pixivUrl}:`, err);

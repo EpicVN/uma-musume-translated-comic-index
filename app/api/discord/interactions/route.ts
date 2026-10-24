@@ -8,12 +8,19 @@ import { PrismaClient, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { scrapeTweetData } from "@/lib/api-twitter-scraper";
 import { scrapePixivMetadata, extractPixivId } from "@/lib/scraper-pixiv";
+import { scrapeSinglePost } from "@/scripts/scrape-single-tweet";
 import { waitUntil } from "@vercel/functions";
 
-// Cấu hình thời gian chạy tối đa cho tác vụ cào ảnh ngầm trên Vercel
+interface DiscordCommandOption {
+  name: string;
+  type?: number;
+  value?: string | number | boolean;
+}
+
+// Configure maximum execution duration for background serverless jobs on Vercel
 export const maxDuration = 60;
 
-// Khởi tạo Prisma Client Singleton tránh cạn connection trên Serverless
+// Initialize Prisma Client Singleton to prevent connection exhaustion in serverless environments
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
@@ -85,7 +92,7 @@ function formatFriendlyError(err: unknown): {
       reason:
         "This Twitter or Pixiv link is already assigned to another comic post.",
       suggestion:
-        "Please check if this post already exists, or click **Reject** if the reporter submitted the wrong link.",
+        "Please verify if this post already exists, or click Reject if the reporter submitted the wrong link.",
     };
   }
 
@@ -93,7 +100,15 @@ function formatFriendlyError(err: unknown): {
     return {
       reason: "The provided link does not contain any readable images.",
       suggestion:
-        "Please check if the link points to a private post, text-only tweet, or incorrect URL.",
+        "Check if the link points to a private post, text-only tweet, or incorrect URL.",
+    };
+  }
+
+  if (message.includes("Blacklist")) {
+    return {
+      reason:
+        "This post involves an artist or keyword currently listed on the blacklist.",
+      suggestion: "Execution rejected automatically due to moderation rules.",
     };
   }
 
@@ -185,12 +200,150 @@ export async function POST(req: NextRequest) {
 
   const interaction = JSON.parse(rawBody);
 
-  // 1. Phản hồi PING cho Discord handshake
+  // 1. Handshake response for Discord PING
   if (interaction.type === InteractionType.PING) {
     return NextResponse.json({ type: InteractionResponseType.PONG });
   }
 
-  // 2. Xử lý tương tác từ nút bấm (Message Component)
+  // =========================================================================
+  // 2. SLASH COMMAND HANDLER (/scrape)
+  // =========================================================================
+  if (interaction.type === InteractionType.APPLICATION_COMMAND) {
+    const commandName = interaction.data?.name;
+
+    if (commandName === "scrape") {
+      const options = (interaction.data?.options ||
+        []) as DiscordCommandOption[];
+      const transUrl = options.find((opt) => opt.name === "url")
+        ?.value as string;
+      const explicitOrigUrl = options.find((opt) => opt.name === "original_url")
+        ?.value as string | undefined;
+      const language =
+        (options.find((opt) => opt.name === "lang")?.value as string) || "en";
+
+      const callerUser =
+        interaction.member?.user?.global_name ||
+        interaction.member?.user?.username ||
+        interaction.user?.username ||
+        "Admin";
+
+      // Acknowledge interaction immediately (< 3 seconds) with a deferred response
+      const immediateResponse = NextResponse.json({
+        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+      });
+
+      waitUntil(
+        (async () => {
+          const webhookEditUrl = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
+
+          try {
+            // Execute comprehensive scraping routine with built-in blacklist and Pixiv/Twitter filters
+            const scrapeResult = await scrapeSinglePost({
+              inputUrl: transUrl,
+              explicitOriginalUrl: explicitOrigUrl,
+              targetLanguage: language,
+            });
+
+            // Revalidate web paths and character indexes
+            revalidateComicUpdates({
+              postId: scrapeResult.transTweetId,
+              originalPostId: scrapeResult.originalPostId,
+              artistHandle: scrapeResult.artistHandle,
+            });
+
+            const baseUrl =
+              process.env.NEXT_PUBLIC_SITE_URL || "https://www.uma-index.top";
+            const comicLink = `${baseUrl}/post/${scrapeResult.originalPostId}?tl=${scrapeResult.transTweetId}`;
+
+            let sourceSummary = `⚠️ *Original post not found (Fallback to Unknown Artist)*`;
+            if (scrapeResult.sourceType === "PIXIV") {
+              const pixivId = extractPixivId(scrapeResult.sourceUrl);
+              sourceSummary = `🎨 [Pixiv #${pixivId}](${scrapeResult.sourceUrl})`;
+            } else if (scrapeResult.sourceType === "TWITTER") {
+              sourceSummary = `🐦 [Twitter Status](${scrapeResult.sourceUrl})`;
+            }
+
+            // Edit deferred response with detailed success embed
+            await fetch(webhookEditUrl, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                embeds: [
+                  {
+                    title: `✅ Comic Scraped Successfully!`,
+                    color: 0x3db4f2,
+                    fields: [
+                      {
+                        name: "Artist",
+                        value: `**${scrapeResult.artistName}** (\`${scrapeResult.artistHandle}\`)`,
+                        inline: true,
+                      },
+                      {
+                        name: "Translator",
+                        value: `**${scrapeResult.translatorName}** (\`${scrapeResult.translatorHandle}\`)`,
+                        inline: true,
+                      },
+                      {
+                        name: "Original Source",
+                        value: sourceSummary,
+                        inline: false,
+                      },
+                      {
+                        name: "Media",
+                        value: `**${scrapeResult.translatedImagesCount}** translated page(s)`,
+                        inline: true,
+                      },
+                      {
+                        name: "Invoked By",
+                        value: `\`${callerUser}\``,
+                        inline: true,
+                      },
+                      {
+                        name: "View Post",
+                        value: `[🔗 Open comic on website](${comicLink})`,
+                        inline: false,
+                      },
+                    ],
+                    footer: { text: "Umazing Index • Manual Scraper" },
+                    timestamp: new Date().toISOString(),
+                  },
+                ],
+              }),
+            });
+          } catch (err: unknown) {
+            console.error("Manual scrape error:", err);
+            const errorMessage =
+              err instanceof Error ? err.message : String(err);
+
+            await fetch(webhookEditUrl, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                embeds: [
+                  {
+                    title: `❌ Failed to Scrape Comic`,
+                    color: 0xef4444,
+                    description: `\`\`\`${errorMessage}\`\`\``,
+                    fields: [
+                      { name: "Target URL", value: transUrl },
+                      { name: "Invoked By", value: `\`${callerUser}\`` },
+                    ],
+                    timestamp: new Date().toISOString(),
+                  },
+                ],
+              }),
+            });
+          }
+        })(),
+      );
+
+      return immediateResponse;
+    }
+  }
+
+  // =========================================================================
+  // 3. MESSAGE COMPONENT HANDLER (Approve / Reject Buttons)
+  // =========================================================================
   if (interaction.type === InteractionType.MESSAGE_COMPONENT) {
     const customId = interaction.data?.custom_id as string;
     if (!customId) {
@@ -204,11 +357,12 @@ export async function POST(req: NextRequest) {
       interaction.user?.username ||
       "A Moderator";
 
-    // Phản hồi Defer ngay lập tức cho Discord (< 50ms) để không bị timeout 3s
+    // Defer update message within 50ms to satisfy Discord's 3-second deadline
     const immediateResponse = NextResponse.json({
       type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE,
     });
 
+    // Helper to resolve the correct OriginalPost ID from either post type
     const resolveOriginalPostId = async (postId: string) => {
       const direct = await prisma.originalPost.findFirst({
         where: { OR: [{ id: postId }, { tweetId: postId }] },
@@ -246,9 +400,9 @@ export async function POST(req: NextRequest) {
             return;
           }
 
-          // =============================================================
+          // -----------------------------------------------------------------
           // ACTION 1: APPROVE
-          // =============================================================
+          // -----------------------------------------------------------------
           if (action === "approve") {
             const lock = await prisma.comicReport.updateMany({
               where: {
@@ -297,14 +451,12 @@ export async function POST(req: NextRequest) {
 
             let appliedDetails = report.content;
 
-            // --- 1.1 XỬ LÝ ORIGINAL_LINK (HỖ TRỢ CẢ TWITTER VÀ PIXIV) ---
+            // --- 1.1 HANDLE ORIGINAL_LINK (PIXIV & TWITTER) ---
             if (report.type === "ORIGINAL_LINK") {
               const pixivId = extractPixivId(report.content);
               const tweetIdMatch = report.content.match(/status\/(\d+)/);
 
-              // ---------------------------------------------------------
-              // TRƯỜNG HỢP A: NGUỒN PIXIV
-              // ---------------------------------------------------------
+              // CASE A: PIXIV SOURCE
               if (pixivId) {
                 const pixivData = await scrapePixivMetadata(report.content);
                 if (!pixivData || pixivData.mediaUrls.length === 0) {
@@ -360,7 +512,6 @@ export async function POST(req: NextRequest) {
                     },
                   });
 
-                  // Dọn dẹp bài placeholder unknown nếu không còn bài dịch nào bám vào
                   if (targetOriginalPostId !== existingOriginalPost.id) {
                     const remaining = await prisma.translatedPost.count({
                       where: { originalPostId: targetOriginalPostId },
@@ -401,9 +552,7 @@ export async function POST(req: NextRequest) {
                   `Images: **${pixivData.mediaUrls.length}** page(s)`,
                 ].join(" • ");
               }
-              // ---------------------------------------------------------
-              // TRƯỜNG HỢP B: NGUỒN TWITTER / X
-              // ---------------------------------------------------------
+              // CASE B: TWITTER SOURCE
               else if (tweetIdMatch) {
                 const tweetId = tweetIdMatch[1];
                 const tweetUrl = `https://x.com/i/status/${tweetId}`;
@@ -529,7 +678,7 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            // --- 1.2 XỬ LÝ CHARACTER_TAG ---
+            // --- 1.2 HANDLE CHARACTER_TAG ---
             else if (report.type === "CHARACTER_TAG") {
               let tagData: {
                 action: string;
@@ -669,7 +818,7 @@ export async function POST(req: NextRequest) {
               });
             }
 
-            // --- 1.3 XỬ LÝ BROKEN_MEDIA ---
+            // --- 1.3 HANDLE BROKEN_MEDIA ---
             else if (report.type === "BROKEN_MEDIA") {
               let mediaData: {
                 target?: "ORIGINAL" | "TRANSLATED";
@@ -760,7 +909,7 @@ export async function POST(req: NextRequest) {
               });
             }
 
-            // Gửi PATCH cập nhật embed thành công và gỡ nút
+            // Send PATCH update to Discord embed on success and dismiss action buttons
             await fetch(webhookEditUrl, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
@@ -798,9 +947,9 @@ export async function POST(req: NextRequest) {
             });
           }
 
-          // =============================================================
+          // -----------------------------------------------------------------
           // ACTION 2: REJECT
-          // =============================================================
+          // -----------------------------------------------------------------
           else if (action === "reject") {
             const lock = await prisma.comicReport.updateMany({
               where: {

@@ -10,6 +10,7 @@ export interface ComicPostItem {
   id: string;
   origId: string;
   origTweetId?: string;
+  origTweetUrl?: string; // Hỗ trợ lưu và hiển thị URL gốc trực tiếp từ DB
   transId: string;
   artistName: string;
   translatorName: string;
@@ -17,7 +18,7 @@ export interface ComicPostItem {
   postedAt: Date | string;
   origMediaUrls: string[];
   transMediaUrls: string[];
-  tags: { id: string; name: string; slug: string }[]; // 👈 Đổi id?: string và slug?: string thành string bắt buộc
+  tags: { id: string; name: string; slug: string }[];
 }
 
 interface ReaderModalProps {
@@ -33,6 +34,15 @@ interface ReaderModalProps {
 function formatHandle(handle?: string) {
   if (!handle) return "";
   return handle.startsWith("@") ? handle : `@${handle}`;
+}
+
+function formatImageUrl(url: string): string {
+  if (!url) return "";
+  if (url.includes("pximg.net") || url.includes("pixiv.cat")) {
+    const rawPximg = url.replace("i.pixiv.cat", "i.pximg.net");
+    return `/api/proxy/pixiv?url=${encodeURIComponent(rawPximg)}`;
+  }
+  return url;
 }
 
 export default function ReaderModal({
@@ -53,20 +63,19 @@ export default function ReaderModal({
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
 
-  // 🌟 1. Dùng Ref để lưu các hàm điều hướng, tránh re-bind listener khi props thay đổi
+  // 1. Dùng Ref để lưu các hàm điều hướng, tránh re-bind listener khi props thay đổi
   const navRefs = useRef({ onNext, onPrev, onClose, hasNext, hasPrev });
   useEffect(() => {
     navRefs.current = { onNext, onPrev, onClose, hasNext, hasPrev };
   });
 
-  // 🌟 2. LƯU LỊCH SỬ ĐỌC: Chỉ chạy đúng 1 lần cho mỗi bài (chặn đứng vòng lặp vô hạn)
+  // 2. LƯU LỊCH SỬ ĐỌC: Chỉ chạy đúng 1 lần cho mỗi bài (chặn đứng vòng lặp vô hạn)
   const currentPostKey = post?.transId || post?.id;
   const lastRecordedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isOpen || !post || !currentPostKey) return;
 
-    // Nếu bài này đã được ghi vào History rồi thì bỏ qua
     if (lastRecordedKeyRef.current === currentPostKey) return;
     lastRecordedKeyRef.current = currentPostKey;
 
@@ -89,7 +98,7 @@ export default function ReaderModal({
     });
   }, [isOpen, post, currentPostKey, recordProgress]);
 
-  // 🌟 3. PHÍM TẮT & KHOÁ CUỘN TRANG: Tách riêng, không phụ thuộc vào recordProgress
+  // 3. PHÍM TẮT & KHOÁ CUỘN TRANG
   useEffect(() => {
     if (!isOpen) return;
 
@@ -135,7 +144,6 @@ export default function ReaderModal({
     const deltaX = e.changedTouches[0].clientX - touchStartX.current;
     const deltaY = e.changedTouches[0].clientY - touchStartY.current;
 
-    // Detect horizontal swipe while avoiding conflict with vertical scrolling
     if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
       if (deltaX < 0 && hasNext) {
         onNext();
@@ -149,6 +157,23 @@ export default function ReaderModal({
   };
 
   if (!isOpen || !post) return null;
+
+  // 🌟 Nhận diện và chuẩn hóa URL bài gốc (Pixiv vs Twitter/X)
+  const isOrigPixiv =
+    Boolean(post.origTweetUrl?.includes("pixiv.net")) ||
+    Boolean(post.origTweetId?.startsWith("pixiv-"));
+
+  const pixivIllustId = post.origTweetId?.startsWith("pixiv-")
+    ? post.origTweetId.replace("pixiv-", "")
+    : null;
+
+  const origSourceUrl =
+    post.origTweetUrl ||
+    (isOrigPixiv && pixivIllustId
+      ? `https://www.pixiv.net/artworks/${pixivIllustId}`
+      : `https://x.com/i/status/${post.origTweetId || post.origId}`);
+
+  const origSourceLabel = isOrigPixiv ? "Open on Pixiv" : "Open on X";
 
   return (
     <div
@@ -220,7 +245,7 @@ export default function ReaderModal({
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 flex-1 min-w-0">
             {/* Top Row on Mobile: Credits + Actions */}
             <div className="flex items-center justify-between w-full sm:w-auto">
-              {/* Credits HUD (Game Style) */}
+              {/* Credits HUD */}
               <div className="flex items-center gap-2 sm:gap-3 truncate">
                 {/* ART */}
                 <div className="flex items-center gap-1.5 drop-shadow-md">
@@ -351,7 +376,7 @@ export default function ReaderModal({
               currentTags={post.tags}
             />
 
-            {/* View on X */}
+            {/* View on X (Translated Post) */}
             <a
               href={`https://x.com/i/status/${post.transId}`}
               target="_blank"
@@ -401,18 +426,22 @@ export default function ReaderModal({
                 mobileTab === "trans" ? "hidden md:flex" : "flex"
               }`}
             >
-              {/* Header Cột: Luôn hiển thị để giữ nút Open on X cho Mobile */}
+              {/* Header Cột: Tự động đổi Open on Pixiv hoặc Open on X */}
               <div className="w-full flex justify-between items-center mb-2.5 sm:mb-3 px-1 sm:px-2">
                 <span className="font-black text-[11px] text-[#f43f5e] uppercase tracking-widest bg-[#f43f5e]/10 px-3 py-1 rounded-full border border-[#f43f5e]/20">
                   Original Raw
                 </span>
                 <a
-                  href={`https://x.com/i/status/${post.origTweetId || post.origId}`}
+                  href={origSourceUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[#8ba0b2] hover:text-white bg-white/5 hover:bg-[#f43f5e]/20 active:bg-white/10 px-2.5 py-1 rounded-lg border border-white/10 hover:border-[#f43f5e]/40 font-bold text-[10px] tracking-wider transition-colors flex items-center gap-1.5 shrink-0"
+                  className={`text-[#8ba0b2] hover:text-white bg-white/5 active:bg-white/10 px-2.5 py-1 rounded-lg border border-white/10 font-bold text-[10px] tracking-wider transition-colors flex items-center gap-1.5 shrink-0 ${
+                    isOrigPixiv
+                      ? "hover:bg-[#0096fa]/20 hover:border-[#0096fa]/40 hover:text-[#0096fa]"
+                      : "hover:bg-[#f43f5e]/20 hover:border-[#f43f5e]/40"
+                  }`}
                 >
-                  <span>Open on X</span>
+                  <span>{origSourceLabel}</span>
                   <svg
                     className="w-3 h-3"
                     fill="none"
@@ -437,7 +466,7 @@ export default function ReaderModal({
                       className="relative w-full rounded-2xl overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.5)] ring-1 ring-white/10 group bg-[#050b14]"
                     >
                       <Image
-                        src={url}
+                        src={formatImageUrl(url)}
                         alt={`Original art page ${idx + 1}`}
                         referrerPolicy="no-referrer"
                         className="w-full h-auto object-contain block select-none"
@@ -455,6 +484,22 @@ export default function ReaderModal({
                     </div>
                   ))}
                 </div>
+              ) : isOrigPixiv ? (
+                /* Fallback an toàn cho bài Pixiv chưa tải được ảnh (Tránh lỗi crash react-tweet) */
+                <div className="w-full max-w-lg p-6 rounded-2xl bg-[#050b14] border border-white/10 text-center flex flex-col items-center justify-center gap-3">
+                  <span className="text-2xl">🎨</span>
+                  <p className="text-xs text-[#8ba0b2]">
+                    Pixiv illustration has no cached raw images.
+                  </p>
+                  <a
+                    href={origSourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 rounded-xl bg-[#0096fa]/20 hover:bg-[#0096fa]/30 text-[#0096fa] text-xs font-bold border border-[#0096fa]/40 transition"
+                  >
+                    View Artwork on Pixiv
+                  </a>
+                </div>
               ) : (
                 <div
                   className="w-full max-w-lg [data-theme='dark'] [&_.react-tweet-theme]:bg-[#050b14]! [&_.react-tweet-theme]:border-white/10! [&_.react-tweet-theme]:rounded-2xl!"
@@ -471,7 +516,6 @@ export default function ReaderModal({
                 mobileTab === "raw" ? "hidden md:flex" : "flex"
               }`}
             >
-              {/* Header Cột: Luôn hiển thị để giữ nút Open on X cho Mobile */}
               <div className="w-full flex justify-between items-center mb-2.5 sm:mb-3 px-1 sm:px-2">
                 <span className="font-black text-[11px] text-[#3db4f2] uppercase tracking-widest bg-[#3db4f2]/10 px-3 py-1 rounded-full border border-[#3db4f2]/20">
                   Translated ({(post.language || "EN").toUpperCase()})
@@ -507,7 +551,7 @@ export default function ReaderModal({
                       className="relative w-full rounded-2xl overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.5)] ring-1 ring-white/10 group bg-[#050b14]"
                     >
                       <Image
-                        src={url}
+                        src={formatImageUrl(url)}
                         alt={`Translated page ${idx + 1}`}
                         referrerPolicy="no-referrer"
                         className="w-full h-auto object-contain block select-none"
