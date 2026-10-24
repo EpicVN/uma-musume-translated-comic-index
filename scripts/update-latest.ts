@@ -50,6 +50,23 @@ const CURRENT_QUARTER_WINDOW = {
   until: UNTIL_DATE,
 };
 
+// Danh sách handle tác giả cần chặn (hỗ trợ cả khai báo trực tiếp lẫn qua biến môi trường .env)
+const BLACKLISTED_ARTISTS = new Set([
+  // Thêm trực tiếp handle của artist vào đây (không cần dấu @, chữ thường hay hoa đều được)
+  "toxic_artist_handle",
+  "lewd_artist_example",
+  ...(process.env.BLACKLISTED_ARTISTS || "")
+    .split(",")
+    .map((h) => h.replace(/^@/, "").trim().toLowerCase())
+    .filter(Boolean),
+]);
+
+function isArtistBlacklisted(handle?: string | null): boolean {
+  if (!handle) return false;
+  const clean = handle.replace(/^@/, "").trim().toLowerCase();
+  return BLACKLISTED_ARTISTS.has(clean);
+}
+
 const EXCLUDED_LANG_KEYWORDS = [
   "traducción al español",
   "traduccion al español",
@@ -936,6 +953,17 @@ async function processTranslatorLatest(
 
     // NẾU TÌM THẤY BÀI GỐC -> TIẾN HÀNH CÀO BÌNH THƯỜNG
     if (originalTweetUrl) {
+      const urlHandleMatch = originalTweetUrl.match(
+        /(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)\/status/i,
+      );
+      if (urlHandleMatch && isArtistBlacklisted(urlHandleMatch[1])) {
+        console.log(
+          `   ⛔ [Blacklist] ID ${tId} trỏ tới tác giả bị chặn: @${urlHandleMatch[1]}. Bỏ qua...`,
+        );
+        skippedCount++;
+        continue; // Bỏ qua toàn bộ bài dịch này, không lưu DB
+      }
+
       let origData: ExtendedTweetData | null = await scrapeTweetMetadata(
         originalTweetUrl,
         false,
@@ -952,6 +980,15 @@ async function processTranslatorLatest(
         const artistHandle = origData.handle.startsWith("@")
           ? origData.handle
           : `@${origData.handle}`;
+
+        // 🌟 CHỐT CHẶN 2: Kiểm tra handle thực tế cào được của Artist
+        if (isArtistBlacklisted(artistHandle)) {
+          console.log(
+            `   ⛔ [Blacklist] Tác giả ${artistHandle} nằm trong danh sách đen. Bỏ qua...`,
+          );
+          skippedCount++;
+          continue; // Bỏ qua, không lưu bài gốc và không lưu bài dịch
+        }
 
         const validArtistName =
           origData.name &&
