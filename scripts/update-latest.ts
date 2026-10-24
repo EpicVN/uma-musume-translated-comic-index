@@ -50,22 +50,40 @@ const CURRENT_QUARTER_WINDOW = {
   until: UNTIL_DATE,
 };
 
-// Danh sách handle tác giả cần chặn (hỗ trợ cả khai báo trực tiếp lẫn qua biến môi trường .env)
-const BLACKLISTED_ARTISTS = new Set([
-  // Thêm trực tiếp handle của artist vào đây (không cần dấu @, chữ thường hay hoa đều được)
-  "toxic_artist_handle",
-  "lewd_artist_example",
-  ...(process.env.BLACKLISTED_ARTISTS || "")
-    .split(",")
-    .map((h) => h.replace(/^@/, "").trim().toLowerCase())
-    .filter(Boolean),
-]);
+// =========================================================================
+// 🌟 KHU VỰC CẤU HÌNH BLACKLIST TÁC GIẢ (CHẠY TRỰC TIẾP TRÊN GITHUB ACTIONS)
+// =========================================================================
+const STATIC_BLACKLISTED_ARTISTS: string[] = [
+  // Điền trực tiếp handle tác giả vào đây (có hoặc không có @, hoa/thường đều được)
+  "to_zaemon",
+];
 
-function isArtistBlacklisted(handle?: string | null): boolean {
-  if (!handle) return false;
-  const clean = handle.replace(/^@/, "").trim().toLowerCase();
+// Chuẩn hóa toàn bộ danh sách: xóa @, trim, chuyển về chữ thường
+const BLACKLISTED_ARTISTS = new Set(
+  STATIC_BLACKLISTED_ARTISTS.map((h) =>
+    h.replace(/^@/, "").trim().toLowerCase(),
+  ).filter(Boolean),
+);
+
+// 1. Kiểm tra chính xác handle hoặc tên tác giả
+function isArtistBlacklisted(identifier?: string | null): boolean {
+  if (!identifier) return false;
+  const clean = identifier.replace(/^@/, "").trim().toLowerCase();
   return BLACKLISTED_ARTISTS.has(clean);
 }
+
+// 2. Kiểm tra văn bản (nội dung tweet / URL) có chứa bất kỳ tác giả bị chặn nào không
+function containsBlacklistedArtist(text?: string | null): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  for (const handle of BLACKLISTED_ARTISTS) {
+    if (lower.includes(handle)) {
+      return true;
+    }
+  }
+  return false;
+}
+// =========================================================================
 
 const EXCLUDED_LANG_KEYWORDS = [
   "traducción al español",
@@ -115,7 +133,6 @@ async function handleUnknownOriginalPost(
   prisma: PrismaClient,
   transData: ExtendedTweetData,
 ): Promise<string> {
-  // 1. Tạo hoặc lấy Artist "Unknown"
   const unknownArtist = await prisma.creator.upsert({
     where: { handle: "@unknown" },
     update: {},
@@ -127,7 +144,6 @@ async function handleUnknownOriginalPost(
     },
   });
 
-  // 2. Tạo bản ghi bài gốc giả lập với tweetId có tiền tố 'unknown-'
   const placeholderTweetId = `unknown-${transData.tweetId}`;
   const originalPost = await prisma.originalPost.upsert({
     where: { tweetId: placeholderTweetId },
@@ -139,7 +155,7 @@ async function handleUnknownOriginalPost(
       tweetUrl: transData.tweetUrl,
       postedAt: parseValidDate(transData.postedAt, transData.tweetId),
       content: "Original post not found or not a quote tweet.",
-      mediaUrls: [], // Mảng rỗng (không có ảnh gốc)
+      mediaUrls: [],
       artistId: unknownArtist.id,
     },
   });
@@ -157,13 +173,9 @@ async function sendDiscordNotification(posts: ScrapedResult[]) {
     return;
   }
 
-  // Silent exit if no new posts were found (avoid spam)
-  if (posts.length === 0) {
-    return;
-  }
+  if (posts.length === 0) return;
 
   try {
-    // Discord enforces a maximum of 10 embeds per message.
     const CHUNK_SIZE = 10;
     const batches: ScrapedResult[][] = [];
     for (let i = 0; i < posts.length; i += CHUNK_SIZE) {
@@ -180,7 +192,7 @@ async function sendDiscordNotification(posts: ScrapedResult[]) {
         return {
           title: `${p.artistName} ➔ @${p.translatorHandle}`,
           url: p.tweetUrl,
-          color: 4044018, // Cyan #3db4f2
+          color: 4044018,
           image: cleanImageUrl ? { url: cleanImageUrl } : undefined,
           footer: { text: `Tweet ID: ${p.tweetId}` },
         };
@@ -234,7 +246,6 @@ async function sendDiscordAlert(errorMessage: string) {
     console.error(" ⚠️ Failed to send Discord alert:", err);
   }
 }
-// -----------------------------------
 
 function parseValidDate(dateStr?: string, tweetId?: string): Date {
   if (dateStr) {
@@ -534,7 +545,6 @@ async function scrapeNSFWWithBrowser(
       const art = document.querySelector('article[data-testid="tweet"]');
       if (!art) return null;
 
-      // Tránh lấy nhầm User-Name bên trong block Quote Tweet
       const quoteBlock = art.querySelector(
         '[data-testid="quoteTweet"], [data-testid="tweetQuote"]',
       );
@@ -573,7 +583,6 @@ async function scrapeNSFWWithBrowser(
         }
       }
 
-      // Trích xuất văn bản chính (không lấy text trong quote)
       const allTextEls = Array.from(
         art.querySelectorAll('[data-testid="tweetText"]'),
       );
@@ -588,7 +597,6 @@ async function scrapeNSFWWithBrowser(
         document.querySelector("article time")?.getAttribute("datetime") ||
         new Date().toISOString();
 
-      // Chỉ lấy ảnh thuộc bài chính (loại trừ ảnh của bài được trích dẫn)
       const photos: string[] = [];
       const images = Array.from(
         art.querySelectorAll('img[src*="pbs.twimg.com/media"]'),
@@ -691,7 +699,6 @@ async function discoverLatestTweetIds(
         const results: { id: string; datetime?: string; text: string }[] = [];
 
         articles.forEach((art) => {
-          // Bỏ qua bài Repost / Retweet
           const socialContext = art.querySelector(
             '[data-testid="socialContext"]',
           );
@@ -708,8 +715,6 @@ async function discoverLatestTweetIds(
 
           if (link) {
             const href = link.getAttribute("href") || "";
-
-            // Kiểm tra link tweet bằng targetHandle đã được truyền vào
             const match = href.match(
               new RegExp(`^\\/${targetHandle}\\/status\\/(\\d+)`, "i"),
             );
@@ -778,7 +783,6 @@ async function processTranslatorLatest(
 
   const newScrapedPosts: ScrapedResult[] = [];
 
-  // 1. Tìm hoặc tạo Translator: Lấy handle làm gốc
   const existingTranslator = await prisma.creator.findUnique({
     where: { handle: translatorHandleWithAt },
   });
@@ -802,7 +806,6 @@ async function processTranslatorLatest(
     },
   });
 
-  // 2. Tìm kiếm trên X thuần theo handle (from:username)
   const tweetIdList = await discoverLatestTweetIds(context, target);
   console.log(`   👉 Discovered ${tweetIdList.length} tweet IDs in window.`);
 
@@ -884,6 +887,15 @@ async function processTranslatorLatest(
       continue;
     }
 
+    // 🌟 CHỐT CHẶN 1: Quét thẳng text của bài dịch (nếu dịch giả ghi Art: @blacklisted)
+    if (transData.text && containsBlacklistedArtist(transData.text)) {
+      console.log(
+        `   ⛔ [Blacklist - Text] ID ${tId}: Mentioned a blacklisted artist in text. Skipping...`,
+      );
+      skippedCount++;
+      continue;
+    }
+
     const authorHandle = (transData.handle || "")
       .replace(/^@/, "")
       .trim()
@@ -894,10 +906,9 @@ async function processTranslatorLatest(
         `   ⏭️ [Skip Repost] ID ${tId} is authored by @${authorHandle}, not @${cleanHandle}. Skipping...`,
       );
       skippedCount++;
-      continue; // Bỏ qua ngay, không sync tên và không lưu vào DB
+      continue;
     }
 
-    // 🌟 CHỐT CHẶN AN TOÀN: Chỉ cập nhật tên Translator nếu handle khớp chính xác
     const cleanScrapedHandle = (transData.handle || "")
       .replace(/^@/, "")
       .toLowerCase();
@@ -948,22 +959,27 @@ async function processTranslatorLatest(
       );
     }
 
-    let originalPostId: string;
-    let fallbackArtistName = "Unknown Artist";
-
-    // NẾU TÌM THẤY BÀI GỐC -> TIẾN HÀNH CÀO BÌNH THƯỜNG
+    // 🌟 CHỐT CHẶN 2: Quét URL bài gốc (loại bỏ trường hợp x.com/i/status/...)
     if (originalTweetUrl) {
       const urlHandleMatch = originalTweetUrl.match(
         /(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)\/status/i,
       );
-      if (urlHandleMatch && isArtistBlacklisted(urlHandleMatch[1])) {
+      const urlHandle = urlHandleMatch ? urlHandleMatch[1].toLowerCase() : "";
+
+      if (urlHandle && urlHandle !== "i" && isArtistBlacklisted(urlHandle)) {
         console.log(
-          `   ⛔ [Blacklist] ID ${tId} trỏ tới tác giả bị chặn: @${urlHandleMatch[1]}. Bỏ qua...`,
+          `   ⛔ [Blacklist - URL] ID ${tId} points to blacklisted artist: @${urlHandle}. Skipping...`,
         );
         skippedCount++;
-        continue; // Bỏ qua toàn bộ bài dịch này, không lưu DB
+        continue;
       }
+    }
 
+    let originalPostId: string;
+    let fallbackArtistName = "Unknown Artist";
+
+    // NẾU TÌM THẤY BÀI GỐC -> TIẾN HÀNH CÀO
+    if (originalTweetUrl) {
       let origData: ExtendedTweetData | null = await scrapeTweetMetadata(
         originalTweetUrl,
         false,
@@ -981,21 +997,24 @@ async function processTranslatorLatest(
           ? origData.handle
           : `@${origData.handle}`;
 
-        // 🌟 CHỐT CHẶN 2: Kiểm tra handle thực tế cào được của Artist
-        if (isArtistBlacklisted(artistHandle)) {
-          console.log(
-            `   ⛔ [Blacklist] Tác giả ${artistHandle} nằm trong danh sách đen. Bỏ qua...`,
-          );
-          skippedCount++;
-          continue; // Bỏ qua, không lưu bài gốc và không lưu bài dịch
-        }
-
         const validArtistName =
           origData.name &&
           origData.name !== "Unknown" &&
           origData.name !== "Unknown Artist"
             ? origData.name.trim()
             : undefined;
+
+        // 🌟 CHỐT CHẶN 3: Quét handle và display name thực tế cào được
+        if (
+          isArtistBlacklisted(artistHandle) ||
+          isArtistBlacklisted(validArtistName)
+        ) {
+          console.log(
+            `   ⛔ [Blacklist - Artist] ID ${tId}: Original creator [${validArtistName || ""} (${artistHandle})] is blacklisted. Skipping...`,
+          );
+          skippedCount++;
+          continue;
+        }
 
         fallbackArtistName = validArtistName || artistHandle;
 
@@ -1034,7 +1053,15 @@ async function processTranslatorLatest(
         const combinedText = `${transData.text || ""} ${origData.text || ""}`;
         await autoTagPost(prisma, originalPost.id, combinedText);
       } else {
-        // Có link nhưng không cào được nội dung tweet gốc
+        // 🌟 CHỐT CHẶN 4: Có link nhưng cào lỗi -> kiểm tra lại link trước khi fallback sang Unknown
+        if (containsBlacklistedArtist(originalTweetUrl)) {
+          console.log(
+            `   ⛔ [Blacklist - Fallback] Original tweet link matched blacklist on failed scrape. Skipping...`,
+          );
+          skippedCount++;
+          continue;
+        }
+
         originalPostId = await handleUnknownOriginalPost(prisma, transData);
       }
     } else {
@@ -1054,7 +1081,7 @@ async function processTranslatorLatest(
         mediaUrls: transData.photos || [],
         postedAt: parseValidDate(transData.postedAt, transData.tweetId),
         translatorId: translator.id,
-        originalPostId: originalPostId, // Gắn ID bài gốc (chuẩn hoặc unknown)
+        originalPostId: originalPostId,
       },
       create: {
         tweetId: transData.tweetId,
@@ -1076,7 +1103,6 @@ async function processTranslatorLatest(
       imageUrl: transData.photos?.[0],
     });
 
-    // Hiển thị trực quan trạng thái cào: nếu không tìm thấy bài gốc sẽ gắn tag cảnh báo
     const isUnknown = fallbackArtistName === "Unknown Artist";
     const artistDisplay = isUnknown ? "❓ Unknown Artist" : fallbackArtistName;
     const sourceStatus = isUnknown ? " [No Quote/Fallback]" : "";
@@ -1195,7 +1221,6 @@ async function runQuickUpdate() {
 
   await browser.close();
 
-  // Gửi báo cáo tổng hợp tới Discord
   if (totalNewPosts.length > 0) {
     await sendDiscordNotification(totalNewPosts);
   }
