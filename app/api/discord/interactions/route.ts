@@ -8,7 +8,7 @@ import { PrismaClient, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { scrapeTweetData } from "@/lib/api-twitter-scraper";
 import { scrapePixivMetadata, extractPixivId } from "@/lib/scraper-pixiv";
-import { scrapeSinglePost } from "@/scripts/scrape-single-tweet";
+import { scrapeSinglePost } from "@/lib/scrape-single-api";
 import { waitUntil } from "@vercel/functions";
 
 interface DiscordCommandOption {
