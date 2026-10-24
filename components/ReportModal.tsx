@@ -33,9 +33,25 @@ const CATEGORIES = [
   { value: "ADD_TAG", label: "➕ Add Missing Character Tag(s)" },
   { value: "REMOVE_TAG", label: "❌ Remove Redundant/Wrong Tag(s)" },
   { value: "REPLACE_TAG", label: "🔄 Replace Incorrect Tag" },
-  { value: "ORIGINAL_LINK", label: "🔗 Add / Update Original Twitter Link" },
+  {
+    value: "ORIGINAL_LINK",
+    label: "🔗 Add / Update Original Link (X / Pixiv)",
+  },
   { value: "BROKEN_MEDIA", label: "🖼️ Broken / Missing Image" },
 ];
+
+// Helper kiểm tra xem URL có đúng định dạng Twitter/X hoặc Pixiv không
+function isValidSourceUrl(url: string): boolean {
+  if (!url) return false;
+  const isTwitter = /(?:twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/\d+/i.test(
+    url,
+  );
+  const isPixiv =
+    /pixiv\.net\/(?:en\/)?(?:artworks\/\d+|member_illust\.php\?[^\s]*illust_id=\d+|i\/\d+)/i.test(
+      url,
+    );
+  return isTwitter || isPixiv;
+}
 
 export default function ReportModal({
   postId,
@@ -49,7 +65,6 @@ export default function ReportModal({
   const [type, setType] = useState<string>("ADD_TAG");
   const [content, setContent] = useState("");
   const [selectedOldTag, setSelectedOldTag] = useState("");
-  // State lưu danh sách nhiều tag được chọn (Multi-select)
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [honeypot, setHoneypot] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -76,7 +91,6 @@ export default function ReportModal({
   const modalRef = useRef<HTMLDivElement>(null);
   const charDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Helper toggle chọn / bỏ chọn tag trong mảng selectedTags
   const handleToggleTag = (tagName: string) => {
     setSelectedTags((prev) =>
       prev.includes(tagName)
@@ -174,6 +188,9 @@ export default function ReportModal({
     if (type === "REPLACE_TAG") {
       return Boolean(selectedOldTag.trim() && content.trim());
     }
+    if (type === "ORIGINAL_LINK") {
+      return Boolean(content.trim());
+    }
     if (type === "BROKEN_MEDIA") {
       return Boolean(brokenUrl.trim());
     }
@@ -183,6 +200,23 @@ export default function ReportModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isFormValid()) return;
+
+    // Cảnh báo nếu nhập link không phải Twitter/X hoặc Pixiv
+    if (type === "ORIGINAL_LINK" && !isValidSourceUrl(content.trim())) {
+      setStatusMessage({
+        text: "Please enter a valid Twitter/X or Pixiv artwork URL.",
+        isError: true,
+      });
+      return;
+    }
+
+    if (type === "BROKEN_MEDIA" && !isValidSourceUrl(brokenUrl.trim())) {
+      setStatusMessage({
+        text: "Please enter a valid Twitter/X or Pixiv artwork URL.",
+        isError: true,
+      });
+      return;
+    }
 
     setIsSubmitting(true);
     setStatusMessage(null);
@@ -417,7 +451,6 @@ export default function ReportModal({
                     </span>
                   </button>
 
-                  {/* Dropdown danh sách nhân vật (Không đóng khi click để chọn nhiều) */}
                   {isCharMenuOpen && (
                     <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#0e1b2a] border border-[#27364b] rounded-xl shadow-2xl z-60 overflow-hidden flex flex-col">
                       <div className="p-2 border-b border-[#1e2d42] bg-[#132032]">
@@ -469,7 +502,6 @@ export default function ReportModal({
                   )}
                 </div>
 
-                {/* Danh sách các tag đã chọn (Chips preview) */}
                 {selectedTags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2.5">
                     {selectedTags.map((tagName) => (
@@ -639,11 +671,11 @@ export default function ReportModal({
               </div>
             )}
 
-            {/* ORIGINAL LINK */}
+            {/* 🌟 ORIGINAL LINK: HỖ TRỢ CẢ TWITTER VÀ PIXIV */}
             {type === "ORIGINAL_LINK" && (
-              <div>
-                <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
-                  Original Tweet Link (X.com):
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-[#8ba0b2]">
+                  Original Post Link (X / Twitter or Pixiv):
                 </label>
                 <input
                   type="url"
@@ -651,13 +683,16 @@ export default function ReportModal({
                   disabled={isSubmitting}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder="https://x.com/artist/status/1845..."
+                  placeholder="https://x.com/.../status/... or https://pixiv.net/artworks/..."
                   className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-xl px-3.5 py-3 focus:outline-none transition disabled:opacity-50"
                 />
+                <p className="text-[11px] text-[#5a6f82] leading-tight">
+                  Supports X.com / Twitter status links and Pixiv artwork URLs.
+                </p>
               </div>
             )}
 
-            {/* BROKEN MEDIA */}
+            {/* 🌟 BROKEN MEDIA: HỖ TRỢ NGUỒN TWITTER VÀ PIXIV */}
             {type === "BROKEN_MEDIA" && (
               <div className="space-y-3.5">
                 <div>
@@ -694,9 +729,9 @@ export default function ReportModal({
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
-                    Source Tweet Link (Only works on x.com):
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-[#8ba0b2]">
+                    Source Post Link (X / Twitter or Pixiv):
                   </label>
                   <input
                     type="url"
@@ -704,9 +739,13 @@ export default function ReportModal({
                     disabled={isSubmitting}
                     value={brokenUrl}
                     onChange={(e) => setBrokenUrl(e.target.value)}
-                    placeholder="https://x.com/.../status/1845..."
+                    placeholder="https://x.com/.../status/... or https://pixiv.net/artworks/..."
                     className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-xl px-3.5 py-3 focus:outline-none transition disabled:opacity-50"
                   />
+                  <p className="text-[11px] text-[#5a6f82] leading-tight">
+                    Provide the Twitter/X or Pixiv link containing the
+                    replacement images.
+                  </p>
                 </div>
 
                 <div>
@@ -718,7 +757,7 @@ export default function ReportModal({
                     disabled={isSubmitting}
                     value={brokenNote}
                     onChange={(e) => setBrokenNote(e.target.value)}
-                    placeholder="e.g. which page is missing,..."
+                    placeholder="e.g. page 2 is missing, wrong resolution,..."
                     className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-xl p-3 focus:outline-none transition disabled:opacity-50 resize-none"
                   />
                 </div>
@@ -794,7 +833,6 @@ export default function ReportModal({
           />
         </svg>
 
-        {/* Ẩn chữ trên mobile (< 768px), chỉ hiện trên PC (>= 768px) */}
         <span className="hidden md:inline">Tags/Reports</span>
       </button>
 

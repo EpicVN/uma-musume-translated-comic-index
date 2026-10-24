@@ -1,5 +1,6 @@
 import { PrismaClient, Prisma } from "@prisma/client";
 import { scrapeTweetMetadata, TweetData } from "../lib/scraper";
+import { scrapePixivMetadata } from "../lib/scraper-pixiv";
 import { autoTagPost } from "../lib/tagger";
 import { BrowserContext, Page, Response } from "playwright";
 import * as dotenv from "dotenv";
@@ -298,6 +299,14 @@ function matchesTranslationKeywords(
   if (!text) return false;
   const lower = text.toLowerCase();
   return target.keywords.some((kw) => lower.includes(kw.toLowerCase()));
+}
+
+function extractOriginalPixivUrl(text: string): string | undefined {
+  if (!text) return undefined;
+  const match = text.match(
+    /https?:\/\/(?:www\.)?pixiv\.net\/(?:en\/)?artworks\/\d+/i,
+  );
+  return match ? match[0] : undefined;
 }
 
 interface QuotedResultContainer {
@@ -937,46 +946,238 @@ async function processTranslatorLatest(
     }
 
     // --- TÌM LINK BÀI GỐC CỦA ARTIST ---
+    // --- TÌM LINK BÀI GỐC CỦA ARTIST (ƯU TIÊN PIXIV NẾU CÓ) ---
+    const originalPixivUrl: string | undefined = extractOriginalPixivUrl(
+      transData.text || "",
+    );
+
     let originalTweetUrl: string | undefined = transData.quotedTweetUrl;
 
-    if (!originalTweetUrl) {
-      originalTweetUrl = extractOriginalTweetUrl(
-        transData.text || "",
-        tId,
-        target.handle,
-      );
-    }
-
-    if (!originalTweetUrl) {
-      console.log(
-        `   🔍 [${idx + 1}/${tweetIdList.length}] Original quote not found in text, resolving via Network/DOM...`,
-      );
-      originalTweetUrl = await fetchOriginalTweetUrlWithNetwork(
-        context,
-        transTweetUrl,
-        tId,
-        target.handle,
-      );
-    }
-
-    // 🌟 CHỐT CHẶN 2: Quét URL bài gốc (loại bỏ trường hợp x.com/i/status/...)
-    if (originalTweetUrl) {
-      const urlHandleMatch = originalTweetUrl.match(
-        /(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)\/status/i,
-      );
-      const urlHandle = urlHandleMatch ? urlHandleMatch[1].toLowerCase() : "";
-
-      if (urlHandle && urlHandle !== "i" && isArtistBlacklisted(urlHandle)) {
-        console.log(
-          `   ⛔ [Blacklist - URL] ID ${tId} points to blacklisted artist: @${urlHandle}. Skipping...`,
+    // Nếu không có link Pixiv trong text, tìm link Twitter
+    if (!originalPixivUrl) {
+      if (!originalTweetUrl) {
+        originalTweetUrl = extractOriginalTweetUrl(
+          transData.text || "",
+          tId,
+          target.handle,
         );
-        skippedCount++;
-        continue;
+      }
+
+      if (!originalTweetUrl) {
+        console.log(
+          `   🔍 [${idx + 1}/${tweetIdList.length}] Original quote not found in text, resolving via Network/DOM...`,
+        );
+        originalTweetUrl = await fetchOriginalTweetUrlWithNetwork(
+          context,
+          transTweetUrl,
+          tId,
+          target.handle,
+        );
+      }
+
+      // 🌟 CHỐT CHẶN: Quét URL bài gốc Twitter (loại trừ trường hợp x.com/i/status/...)
+      if (originalTweetUrl) {
+        const urlHandleMatch = originalTweetUrl.match(
+          /(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)\/status/i,
+        );
+        const urlHandle = urlHandleMatch ? urlHandleMatch[1].toLowerCase() : "";
+
+        if (urlHandle && urlHandle !== "i" && isArtistBlacklisted(urlHandle)) {
+          console.log(
+            `   ⛔ [Blacklist - URL] ID ${tId} points to blacklisted artist: @${urlHandle}. Skipping...`,
+          );
+          skippedCount++;
+          continue;
+        }
       }
     }
 
     let originalPostId: string;
     let fallbackArtistName = "Unknown Artist";
+
+    // ==============================================================
+    // TRƯỜNG HỢP 1: BÀI GỐC LÀ LINK PIXIV
+    // ==============================================================
+    if (originalPixivUrl) {
+      console.log(
+        `   🎨 [Pixiv Source] ID ${tId}: Tìm thấy link gốc Pixiv ➔ ${originalPixivUrl}`,
+      );
+      const pixivData = await scrapePixivMetadata(originalPixivUrl);
+
+      if (pixivData) {
+        // 🌟 Chốt chặn Blacklist tác giả Pixiv (quét cả handle tài khoản và tên hiển thị)
+        if (
+          isArtistBlacklisted(pixivData.artistAccount) ||
+          isArtistBlacklisted(pixivData.artistName)
+        ) {
+          console.log(
+            `   ⛔ [Blacklist - Pixiv] Tác giả Pixiv [${pixivData.artistName} (@${pixivData.artistAccount})] nằm trong blacklist. Bỏ qua...`,
+          );
+          skippedCount++;
+          continue;
+        }
+
+        fallbackArtistName = pixivData.artistName;
+        const artistHandle = `@${pixivData.artistAccount}`;
+
+        // 1. Tạo hoặc cập nhật tác giả Pixiv
+        const artist = await prisma.creator.upsert({
+          where: { handle: artistHandle },
+          update: {
+            role: "ARTIST",
+            name: pixivData.artistName,
+            profileUrl: pixivData.profileUrl,
+          },
+          create: {
+            handle: artistHandle,
+            name: pixivData.artistName,
+            profileUrl: pixivData.profileUrl,
+            role: "ARTIST",
+          },
+        });
+
+        // 2. Lưu bài gốc Pixiv với tiền tố "pixiv-" để tránh đụng độ ID số với Twitter
+        const pixivPostId = `pixiv-${pixivData.illustId}`;
+        const originalPost = await prisma.originalPost.upsert({
+          where: { tweetId: pixivPostId },
+          update: {
+            content: pixivData.title || "",
+            mediaUrls: pixivData.mediaUrls || [],
+            artistId: artist.id,
+          },
+          create: {
+            tweetId: pixivPostId,
+            tweetUrl: originalPixivUrl,
+            postedAt: new Date(pixivData.postedAt),
+            content: pixivData.title || "",
+            mediaUrls: pixivData.mediaUrls || [],
+            artistId: artist.id,
+          },
+        });
+
+        originalPostId = originalPost.id;
+
+        // 3. Tự động gắn tag nhân vật (kết hợp tiêu đề Pixiv + text bài dịch)
+        const combinedText = `${transData.text || ""} ${pixivData.title || ""} ${pixivData.caption || ""}`;
+        await autoTagPost(prisma, originalPost.id, combinedText);
+      } else {
+        // Cào Pixiv thất bại -> Kiểm tra lại URL trước khi fallback sang Unknown
+        if (containsBlacklistedArtist(originalPixivUrl)) {
+          console.log(
+            `   ⛔ [Blacklist - Pixiv Fail] Link Pixiv nằm trong blacklist. Bỏ qua...`,
+          );
+          skippedCount++;
+          continue;
+        }
+
+        console.log(
+          `   ⚠️ Không cào được dữ liệu Pixiv, chuyển sang gán Unknown Artist.`,
+        );
+        originalPostId = await handleUnknownOriginalPost(prisma, transData);
+        await autoTagPost(prisma, originalPostId, transData.text || "");
+      }
+    }
+
+    // ==============================================================
+    // TRƯỜNG HỢP 2: BÀI GỐC LÀ LINK TWITTER / X
+    // ==============================================================
+    else if (originalTweetUrl) {
+      let origData: ExtendedTweetData | null = await scrapeTweetMetadata(
+        originalTweetUrl,
+        false,
+      );
+
+      if (!origData || !origData.photos?.length) {
+        console.log(
+          `   🔞 Scraping original tweet photos via browser (NSFW)...`,
+        );
+        origData = await scrapeNSFWWithBrowser(context, originalTweetUrl);
+      }
+
+      if (origData) {
+        const artistHandle = origData.handle.startsWith("@")
+          ? origData.handle
+          : `@${origData.handle}`;
+
+        const validArtistName =
+          origData.name &&
+          origData.name !== "Unknown" &&
+          origData.name !== "Unknown Artist"
+            ? origData.name.trim()
+            : undefined;
+
+        // 🌟 Chốt chặn Blacklist tác giả Twitter
+        if (
+          isArtistBlacklisted(artistHandle) ||
+          isArtistBlacklisted(validArtistName)
+        ) {
+          console.log(
+            `   ⛔ [Blacklist - Artist] ID ${tId}: Original creator [${validArtistName || ""} (${artistHandle})] is blacklisted. Skipping...`,
+          );
+          skippedCount++;
+          continue;
+        }
+
+        fallbackArtistName = validArtistName || artistHandle;
+
+        const artist = await prisma.creator.upsert({
+          where: { handle: artistHandle },
+          update: {
+            role: "ARTIST",
+            ...(validArtistName ? { name: validArtistName } : {}),
+          },
+          create: {
+            handle: artistHandle,
+            name: validArtistName || artistHandle,
+            profileUrl: `https://x.com/${artistHandle.replace("@", "")}`,
+            role: "ARTIST",
+          },
+        });
+
+        const originalPost = await prisma.originalPost.upsert({
+          where: { tweetId: origData.tweetId },
+          update: {
+            content: origData.text || "",
+            mediaUrls: origData.photos || [],
+            artistId: artist.id,
+          },
+          create: {
+            tweetId: origData.tweetId,
+            tweetUrl: origData.tweetUrl,
+            postedAt: parseValidDate(origData.postedAt, origData.tweetId),
+            content: origData.text || "",
+            mediaUrls: origData.photos || [],
+            artistId: artist.id,
+          },
+        });
+
+        originalPostId = originalPost.id;
+        const combinedText = `${transData.text || ""} ${origData.text || ""}`;
+        await autoTagPost(prisma, originalPost.id, combinedText);
+      } else {
+        if (containsBlacklistedArtist(originalTweetUrl)) {
+          console.log(
+            `   ⛔ [Blacklist - Fallback] Original tweet link matched blacklist on failed scrape. Skipping...`,
+          );
+          skippedCount++;
+          continue;
+        }
+
+        originalPostId = await handleUnknownOriginalPost(prisma, transData);
+        await autoTagPost(prisma, originalPostId, transData.text || "");
+      }
+    }
+
+    // ==============================================================
+    // TRƯỜNG HỢP 3: KHÔNG TÌM THẤY BẤT KỲ LINK GỐC NÀO
+    // ==============================================================
+    else {
+      console.log(
+        `   ⚠️ [${idx + 1}/${tweetIdList.length}] ID ${tId}: Not a quote tweet and no Pixiv source. Fallback to Unknown Artist.`,
+      );
+      originalPostId = await handleUnknownOriginalPost(prisma, transData);
+      await autoTagPost(prisma, originalPostId, transData.text || "");
+    }
 
     // NẾU TÌM THẤY BÀI GỐC -> TIẾN HÀNH CÀO
     if (originalTweetUrl) {

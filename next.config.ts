@@ -25,6 +25,11 @@ const nextConfig: NextConfig = {
         hostname: "mangadex.org",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "i.pixiv.cat",
+        pathname: "/**",
+      },
     ],
   },
   async headers() {

@@ -7,6 +7,7 @@ import {
 import { PrismaClient, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { scrapeTweetData } from "@/lib/api-twitter-scraper";
+import { scrapePixivMetadata, extractPixivId } from "@/lib/scraper-pixiv";
 import { waitUntil } from "@vercel/functions";
 
 // Cấu hình thời gian chạy tối đa cho tác vụ cào ảnh ngầm trên Vercel
@@ -81,7 +82,8 @@ function formatFriendlyError(err: unknown): {
       message.includes("already exists"))
   ) {
     return {
-      reason: "This Twitter/X link is already assigned to another comic post.",
+      reason:
+        "This Twitter or Pixiv link is already assigned to another comic post.",
       suggestion:
         "Please check if this post already exists, or click **Reject** if the reporter submitted the wrong link.",
     };
@@ -89,20 +91,28 @@ function formatFriendlyError(err: unknown): {
 
   if (message.includes("No images found")) {
     return {
-      reason: "The provided Twitter/X link does not contain any images.",
+      reason: "The provided link does not contain any readable images.",
       suggestion:
-        "Please check if the link points to a text tweet, video, or an incorrect URL.",
+        "Please check if the link points to a private post, text-only tweet, or incorrect URL.",
+    };
+  }
+
+  if (message.includes("Pixiv illustration")) {
+    return {
+      reason: "Failed to fetch artwork from Pixiv (deleted, private, or R-18).",
+      suggestion:
+        "Ensure the Pixiv illust ID is valid and accessible publicly without login.",
     };
   }
 
   if (
     message.includes("Missing tweet URL") ||
-    message.includes("Missing Tweet URL")
+    message.includes("Missing source URL")
   ) {
     return {
-      reason: "No Twitter/X link was provided to re-scrape images.",
+      reason: "No valid Twitter or Pixiv link was provided to process.",
       suggestion:
-        "Please reject this report and ask the reporter to include a valid tweet URL.",
+        "Please reject this report and ask the reporter to include a valid link.",
     };
   }
 
@@ -128,9 +138,9 @@ function formatFriendlyError(err: unknown): {
 
   if (message.includes("scrape") || message.includes("fetch")) {
     return {
-      reason: "Failed to fetch images or tweet metadata from Twitter/X.",
+      reason: "Failed to fetch media metadata from Twitter/X or Pixiv.",
       suggestion:
-        "The tweet might be private, deleted, or Twitter is temporarily rate-limiting. Please try again later.",
+        "The target post may be restricted or rate-limited. Please try again later.",
     };
   }
 
@@ -194,13 +204,11 @@ export async function POST(req: NextRequest) {
       interaction.user?.username ||
       "A Moderator";
 
-    // 🌟 BƯỚC QUAN TRỌNG NHẤT: BÁO CHO DISCORD TRONG VÒNG < 50MS
-    // Không chạy bất kỳ truy vấn Prisma hay async I/O nào trước dòng này!
+    // Phản hồi Defer ngay lập tức cho Discord (< 50ms) để không bị timeout 3s
     const immediateResponse = NextResponse.json({
       type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE,
     });
 
-    // Helper phân giải ID bài gốc
     const resolveOriginalPostId = async (postId: string) => {
       const direct = await prisma.originalPost.findFirst({
         where: { OR: [{ id: postId }, { tweetId: postId }] },
@@ -215,14 +223,12 @@ export async function POST(req: NextRequest) {
       return translated?.originalPostId || null;
     };
 
-    // Đẩy TOÀN BỘ công việc kết nối database vào nền ngầm
     waitUntil(
       (async () => {
         const webhookEditUrl = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
         const webhookFollowupUrl = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}`;
 
         try {
-          // 1. Tìm báo cáo trong Database (chạy an toàn trong nền)
           const report = await prisma.comicReport.findUnique({
             where: { id: reportId },
           });
@@ -244,7 +250,6 @@ export async function POST(req: NextRequest) {
           // ACTION 1: APPROVE
           // =============================================================
           if (action === "approve") {
-            // Optimistic Lock: Chỉ 1 Mod được duyệt
             const lock = await prisma.comicReport.updateMany({
               where: {
                 id: reportId,
@@ -263,7 +268,7 @@ export async function POST(req: NextRequest) {
                 body: JSON.stringify({
                   content:
                     "⚠️ This report is already being processed or has been completed by another moderator.",
-                  flags: 64, // Ephemeral
+                  flags: 64,
                 }),
               });
               return;
@@ -292,10 +297,114 @@ export async function POST(req: NextRequest) {
 
             let appliedDetails = report.content;
 
-            // --- 1.1 XỬ LÝ ORIGINAL_LINK ---
+            // --- 1.1 XỬ LÝ ORIGINAL_LINK (HỖ TRỢ CẢ TWITTER VÀ PIXIV) ---
             if (report.type === "ORIGINAL_LINK") {
+              const pixivId = extractPixivId(report.content);
               const tweetIdMatch = report.content.match(/status\/(\d+)/);
-              if (tweetIdMatch) {
+
+              // ---------------------------------------------------------
+              // TRƯỜNG HỢP A: NGUỒN PIXIV
+              // ---------------------------------------------------------
+              if (pixivId) {
+                const pixivData = await scrapePixivMetadata(report.content);
+                if (!pixivData || pixivData.mediaUrls.length === 0) {
+                  throw new Error(
+                    "Pixiv illustration metadata not found or has no images.",
+                  );
+                }
+
+                const artistHandle = `@${pixivData.artistAccount}`;
+                const creator = await prisma.creator.upsert({
+                  where: { handle: artistHandle },
+                  update: {
+                    name: pixivData.artistName,
+                    profileUrl: pixivData.profileUrl,
+                  },
+                  create: {
+                    handle: artistHandle,
+                    name: pixivData.artistName,
+                    profileUrl: pixivData.profileUrl,
+                    role: "ARTIST",
+                  },
+                });
+
+                const pixivUniqueId = `pixiv-${pixivId}`;
+                const existingOriginalPost =
+                  await prisma.originalPost.findUnique({
+                    where: { tweetId: pixivUniqueId },
+                  });
+
+                let finalOriginalPostId = targetOriginalPostId;
+
+                if (existingOriginalPost) {
+                  finalOriginalPostId = existingOriginalPost.id;
+
+                  await prisma.translatedPost.updateMany({
+                    where: {
+                      OR: [
+                        { id: report.postId },
+                        { originalPostId: targetOriginalPostId },
+                      ],
+                    },
+                    data: { originalPostId: existingOriginalPost.id },
+                  });
+
+                  await prisma.originalPost.update({
+                    where: { id: existingOriginalPost.id },
+                    data: {
+                      mediaUrls: pixivData.mediaUrls,
+                      mediaCount: pixivData.mediaUrls.length,
+                      content: pixivData.title || undefined,
+                      postedAt: new Date(pixivData.postedAt),
+                      artistId: creator.id,
+                    },
+                  });
+
+                  // Dọn dẹp bài placeholder unknown nếu không còn bài dịch nào bám vào
+                  if (targetOriginalPostId !== existingOriginalPost.id) {
+                    const remaining = await prisma.translatedPost.count({
+                      where: { originalPostId: targetOriginalPostId },
+                    });
+                    if (remaining === 0) {
+                      await prisma.postTag.deleteMany({
+                        where: { postId: targetOriginalPostId },
+                      });
+                      await prisma.originalPost
+                        .delete({ where: { id: targetOriginalPostId } })
+                        .catch(() => {});
+                    }
+                  }
+                } else {
+                  await prisma.originalPost.update({
+                    where: { id: targetOriginalPostId },
+                    data: {
+                      tweetId: pixivUniqueId,
+                      tweetUrl: `https://www.pixiv.net/artworks/${pixivId}`,
+                      content: pixivData.title || "",
+                      mediaUrls: pixivData.mediaUrls,
+                      mediaCount: pixivData.mediaUrls.length,
+                      postedAt: new Date(pixivData.postedAt),
+                      artist: { connect: { id: creator.id } },
+                    },
+                  });
+                }
+
+                revalidateComicUpdates({
+                  postId: report.postId,
+                  originalPostId: finalOriginalPostId,
+                  artistHandle: artistHandle,
+                });
+
+                appliedDetails = [
+                  `🎨 **Pixiv Source Linked:** [Pixiv #${pixivId}](https://www.pixiv.net/artworks/${pixivId})`,
+                  `Artist: **${pixivData.artistName}** (\`${artistHandle}\`)`,
+                  `Images: **${pixivData.mediaUrls.length}** page(s)`,
+                ].join(" • ");
+              }
+              // ---------------------------------------------------------
+              // TRƯỜNG HỢP B: NGUỒN TWITTER / X
+              // ---------------------------------------------------------
+              else if (tweetIdMatch) {
                 const tweetId = tweetIdMatch[1];
                 const tweetUrl = `https://x.com/i/status/${tweetId}`;
                 const scraped = await scrapeTweetData(tweetUrl);
@@ -413,6 +522,10 @@ export async function POST(req: NextRequest) {
                 ]
                   .filter(Boolean)
                   .join(" • ");
+              } else {
+                throw new Error(
+                  "Invalid link: Must be a Twitter/X or Pixiv artwork URL.",
+                );
               }
             }
 
@@ -574,14 +687,34 @@ export async function POST(req: NextRequest) {
               }
 
               if (!mediaData.tweetUrl) {
-                throw new Error("Missing tweet URL to scrape images.");
+                throw new Error("Missing source URL to scrape images.");
               }
 
-              const scraped = await scrapeTweetData(mediaData.tweetUrl);
-              if (!scraped || scraped.mediaUrls.length === 0) {
-                throw new Error(
-                  "No images found in the provided Twitter post.",
+              let mediaUrls: string[] = [];
+              let textContent: string | undefined = undefined;
+
+              const pixivId = extractPixivId(mediaData.tweetUrl);
+
+              if (pixivId) {
+                const pixivScraped = await scrapePixivMetadata(
+                  mediaData.tweetUrl,
                 );
+                if (!pixivScraped || pixivScraped.mediaUrls.length === 0) {
+                  throw new Error(
+                    "No images found in the provided Pixiv artwork.",
+                  );
+                }
+                mediaUrls = pixivScraped.mediaUrls;
+                textContent = pixivScraped.title;
+              } else {
+                const scraped = await scrapeTweetData(mediaData.tweetUrl);
+                if (!scraped || scraped.mediaUrls.length === 0) {
+                  throw new Error(
+                    "No images found in the provided Twitter post.",
+                  );
+                }
+                mediaUrls = scraped.mediaUrls;
+                textContent = scraped.text;
               }
 
               const isOriginal = mediaData.target === "ORIGINAL";
@@ -590,13 +723,13 @@ export async function POST(req: NextRequest) {
                 await prisma.originalPost.update({
                   where: { id: targetOriginalPostId },
                   data: {
-                    mediaUrls: scraped.mediaUrls,
-                    mediaCount: scraped.mediaUrls.length,
-                    ...(scraped.text ? { content: scraped.text } : {}),
+                    mediaUrls,
+                    mediaCount: mediaUrls.length,
+                    ...(textContent ? { content: textContent } : {}),
                   },
                 });
 
-                appliedDetails = `🖼️ **Restored Raw Images:** Replaced with **${scraped.mediaUrls.length}** image(s) from [Tweet](${mediaData.tweetUrl})`;
+                appliedDetails = `🖼️ **Restored Raw Images:** Replaced with **${mediaUrls.length}** image(s) from [Source](${mediaData.tweetUrl})`;
               } else {
                 const translatedPost = await prisma.translatedPost.findFirst({
                   where: {
@@ -614,11 +747,11 @@ export async function POST(req: NextRequest) {
                 await prisma.translatedPost.update({
                   where: { id: translatedPost.id },
                   data: {
-                    mediaUrls: scraped.mediaUrls,
+                    mediaUrls,
                   },
                 });
 
-                appliedDetails = `🌐 **Restored Translated Images:** Replaced with **${scraped.mediaUrls.length}** image(s) from [Tweet](${mediaData.tweetUrl})`;
+                appliedDetails = `🌐 **Restored Translated Images:** Replaced with **${mediaUrls.length}** image(s) from [Source](${mediaData.tweetUrl})`;
               }
 
               revalidateComicUpdates({
@@ -778,7 +911,6 @@ export async function POST(req: NextRequest) {
       })(),
     );
 
-    // TRẢ VỀ CHO DISCORD NGAY
     return immediateResponse;
   }
 
