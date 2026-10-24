@@ -9,6 +9,9 @@ import { revalidatePath } from "next/cache";
 import { scrapeTweetData } from "@/lib/api-twitter-scraper";
 import { waitUntil } from "@vercel/functions";
 
+// Cấu hình thời gian chạy tối đa cho tác vụ cào ảnh ngầm trên Vercel
+export const maxDuration = 60;
+
 // Khởi tạo Prisma Client Singleton tránh cạn connection trên Serverless
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
@@ -23,31 +26,25 @@ interface RevalidateOptions {
 
 export function revalidateComicUpdates(options: RevalidateOptions) {
   try {
-    // 1. Xóa cache trang chủ (danh sách bài mới nhất)
     revalidatePath("/", "page");
 
-    // 2. Xóa cache trang đọc truyện của bài viết
     if (options.postId) {
       revalidatePath(`/post/${options.postId}`, "page");
     }
 
-    // Nếu bài báo cáo là bản dịch và ID khác bài gốc -> xóa luôn cache trang bài gốc
     if (options.originalPostId && options.originalPostId !== options.postId) {
       revalidatePath(`/post/${options.originalPostId}`, "page");
     }
 
-    // 3. Xóa cache trang tác giả nếu có cập nhật Artist
     if (options.artistHandle) {
       const handle = encodeURIComponent(options.artistHandle.trim());
       revalidatePath(`/artist/${handle}`, "page");
       revalidatePath(`/creator/${handle}`, "page");
     }
 
-    // 4. Xóa cache trang danh sách & trang chi tiết nhân vật (Khử trùng lặp)
     if (options.characterSlugs && options.characterSlugs.length > 0) {
       revalidatePath("/characters", "page");
 
-      // Dùng Set để tránh revalidate trùng lặp nếu mảng có slug lặp lại
       const uniqueSlugs = new Set(
         options.characterSlugs.map((s) => s?.trim()).filter(Boolean),
       );
@@ -78,7 +75,6 @@ function formatFriendlyError(err: unknown): {
 } {
   const message = err instanceof Error ? err.message : String(err);
 
-  // 1. Trùng link Tweet (Unique constraint tweetId)
   if (
     message.includes("tweetId") &&
     (message.includes("Unique constraint") ||
@@ -91,7 +87,6 @@ function formatFriendlyError(err: unknown): {
     };
   }
 
-  // 2. Tweet không chứa ảnh nào (Broken Media / Scraping)
   if (message.includes("No images found")) {
     return {
       reason: "The provided Twitter/X link does not contain any images.",
@@ -100,7 +95,6 @@ function formatFriendlyError(err: unknown): {
     };
   }
 
-  // 3. Thiếu URL cào ảnh trong payload
   if (
     message.includes("Missing tweet URL") ||
     message.includes("Missing Tweet URL")
@@ -112,7 +106,6 @@ function formatFriendlyError(err: unknown): {
     };
   }
 
-  // 4. Không tìm thấy bản ghi bài dịch (TranslatedPost)
   if (message.includes("Translated comic record not found")) {
     return {
       reason:
@@ -122,7 +115,6 @@ function formatFriendlyError(err: unknown): {
     };
   }
 
-  // 5. Không tìm thấy bài viết trong database (Prisma P2025)
   if (
     message.includes("Record to update not found") ||
     message.includes("P2025")
@@ -134,7 +126,6 @@ function formatFriendlyError(err: unknown): {
     };
   }
 
-  // 6. Lỗi cào dữ liệu / nghẽn mạng từ Twitter / FxTwitter
   if (message.includes("scrape") || message.includes("fetch")) {
     return {
       reason: "Failed to fetch images or tweet metadata from Twitter/X.",
@@ -143,7 +134,6 @@ function formatFriendlyError(err: unknown): {
     };
   }
 
-  // Fallback mặc định
   return {
     reason: "An unexpected technical error occurred while applying changes.",
     suggestion:
@@ -151,7 +141,6 @@ function formatFriendlyError(err: unknown): {
   };
 }
 
-// GET endpoint kiểm tra kết nối
 export async function GET() {
   return NextResponse.json({
     status: "ok",
@@ -173,7 +162,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Xác thực chữ ký từ Discord
   const isValid = await verifyKey(
     rawBody,
     signature,
@@ -206,21 +194,13 @@ export async function POST(req: NextRequest) {
       interaction.user?.username ||
       "A Moderator";
 
-    const report = await prisma.comicReport.findUnique({
-      where: { id: reportId },
+    // 🌟 BƯỚC QUAN TRỌNG NHẤT: BÁO CHO DISCORD TRONG VÒNG < 50MS
+    // Không chạy bất kỳ truy vấn Prisma hay async I/O nào trước dòng này!
+    const immediateResponse = NextResponse.json({
+      type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE,
     });
 
-    if (!report) {
-      return NextResponse.json({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: "⚠️ This report no longer exists in the database.",
-          flags: 64, // Ephemeral
-        },
-      });
-    }
-
-    // Helper: Tự động phân giải ra đúng OriginalPost.id
+    // Helper phân giải ID bài gốc
     const resolveOriginalPostId = async (postId: string) => {
       const direct = await prisma.originalPost.findFirst({
         where: { OR: [{ id: postId }, { tweetId: postId }] },
@@ -235,20 +215,36 @@ export async function POST(req: NextRequest) {
       return translated?.originalPostId || null;
     };
 
-    // =============================================================
-    // ACTION 1: APPROVE (Sử dụng Atomic Lock & Defer chống 3s timeout)
-    // =============================================================
-    if (action === "approve") {
-      // 1. BÁO NGAY CHO DISCORD TRONG 50MS ĐẦU ĐỂ DẬP TẮT TIMEOUT 3 GIÂY
-      const deferredResponse = NextResponse.json({
-        type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE,
-      });
+    // Đẩy TOÀN BỘ công việc kết nối database vào nền ngầm
+    waitUntil(
+      (async () => {
+        const webhookEditUrl = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
+        const webhookFollowupUrl = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}`;
 
-      // 2. TOÀN BỘ LOGIC DATABASE VÀ KIỂM TRA ĐƯỢC ĐẨY VÀO CHẠY NGẦM
-      waitUntil(
-        (async () => {
-          try {
-            // --- BƯỚC KHÓA BÁO CÁO (OPTIMISTIC LOCK) ---
+        try {
+          // 1. Tìm báo cáo trong Database (chạy an toàn trong nền)
+          const report = await prisma.comicReport.findUnique({
+            where: { id: reportId },
+          });
+
+          if (!report) {
+            await fetch(webhookEditUrl, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                content: "⚠️ This report no longer exists in the database.",
+                embeds: [],
+                components: [],
+              }),
+            });
+            return;
+          }
+
+          // =============================================================
+          // ACTION 1: APPROVE
+          // =============================================================
+          if (action === "approve") {
+            // Optimistic Lock: Chỉ 1 Mod được duyệt
             const lock = await prisma.comicReport.updateMany({
               where: {
                 id: reportId,
@@ -260,20 +256,16 @@ export async function POST(req: NextRequest) {
               },
             });
 
-            // Nếu đã có mod khác duyệt trước: Gửi tin nhắn ẩn cảnh báo cho mod này
             if (lock.count === 0) {
-              await fetch(
-                `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    content:
-                      "⚠️ This report is already being processed or has been completed by another moderator.",
-                    flags: 64, // Ephemeral: Chỉ mod vừa bấm mới nhìn thấy
-                  }),
-                },
-              );
+              await fetch(webhookFollowupUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  content:
+                    "⚠️ This report is already being processed or has been completed by another moderator.",
+                  flags: 64, // Ephemeral
+                }),
+              });
               return;
             }
 
@@ -282,29 +274,25 @@ export async function POST(req: NextRequest) {
             );
 
             if (!targetOriginalPostId) {
-              // Rollback nếu không tìm thấy ID bài gốc
               await prisma.comicReport.update({
                 where: { id: reportId },
                 data: { status: "PENDING", handledBy: null },
               });
 
-              await fetch(
-                `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    content: `⚠️ Could not find any original post associated with ID: \`${report.postId}\``,
-                    flags: 64,
-                  }),
-                },
-              );
+              await fetch(webhookFollowupUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  content: `⚠️ Could not find any original post associated with ID: \`${report.postId}\``,
+                  flags: 64,
+                }),
+              });
               return;
             }
 
             let appliedDetails = report.content;
 
-            // --- 1. XỬ LÝ ORIGINAL_LINK (RE-LINK HOẶC CẬP NHẬT) ---
+            // --- 1.1 XỬ LÝ ORIGINAL_LINK ---
             if (report.type === "ORIGINAL_LINK") {
               const tweetIdMatch = report.content.match(/status\/(\d+)/);
               if (tweetIdMatch) {
@@ -312,7 +300,6 @@ export async function POST(req: NextRequest) {
                 const tweetUrl = `https://x.com/i/status/${tweetId}`;
                 const scraped = await scrapeTweetData(tweetUrl);
 
-                // 1. Đồng bộ / upsert thông tin Artist nếu cào được
                 let artistId: string | undefined = undefined;
                 let artistInfo = "";
 
@@ -336,7 +323,6 @@ export async function POST(req: NextRequest) {
                   artistInfo = `Artist: **${artistName}** (\`@${artistHandle}\`)`;
                 }
 
-                // 2. Kiểm tra xem tweetId của bài gốc này đã từng tồn tại trong DB chưa
                 const existingOriginalPost =
                   await prisma.originalPost.findUnique({
                     where: { tweetId },
@@ -345,10 +331,8 @@ export async function POST(req: NextRequest) {
                 let finalOriginalPostId = targetOriginalPostId;
 
                 if (existingOriginalPost) {
-                  // === TRƯỜNG HỢP A: BÀI GỐC ĐÃ TỒN TẠI TRƯỚC ĐÓ ===
                   finalOriginalPostId = existingOriginalPost.id;
 
-                  // Chuyển bản dịch trỏ sang bài gốc đã có sẵn
                   await prisma.translatedPost.updateMany({
                     where: {
                       OR: [
@@ -361,7 +345,6 @@ export async function POST(req: NextRequest) {
                     },
                   });
 
-                  // Cập nhật bổ sung ảnh/nội dung cho bài gốc đã có nếu trước đó bị thiếu
                   if (scraped && scraped.mediaUrls.length > 0) {
                     await prisma.originalPost.update({
                       where: { id: existingOriginalPost.id },
@@ -377,7 +360,6 @@ export async function POST(req: NextRequest) {
                     });
                   }
 
-                  // Dọn dẹp bài gốc rác (ví dụ bài tạm unknown-) nếu không còn bản dịch nào bám vào
                   if (targetOriginalPostId !== existingOriginalPost.id) {
                     const remaining = await prisma.translatedPost.count({
                       where: { originalPostId: targetOriginalPostId },
@@ -393,7 +375,6 @@ export async function POST(req: NextRequest) {
                     }
                   }
                 } else {
-                  // === TRƯỜNG HỢP B: BÀI GỐC CHƯA CÓ TRONG DB (UPDATE BÌNH THƯỜNG) ===
                   const updateData: Prisma.OriginalPostUpdateInput = {
                     tweetId,
                     tweetUrl,
@@ -416,7 +397,6 @@ export async function POST(req: NextRequest) {
                   });
                 }
 
-                // 3. Xóa cache Next.js với ID bài gốc chính xác
                 revalidateComicUpdates({
                   postId: report.postId,
                   originalPostId: finalOriginalPostId,
@@ -436,7 +416,7 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            // --- 2. Xử lý CHARACTER_TAG ---
+            // --- 1.2 XỬ LÝ CHARACTER_TAG ---
             else if (report.type === "CHARACTER_TAG") {
               let tagData: {
                 action: string;
@@ -576,7 +556,7 @@ export async function POST(req: NextRequest) {
               });
             }
 
-            // --- 3. Xử lý BROKEN_MEDIA ---
+            // --- 1.3 XỬ LÝ BROKEN_MEDIA ---
             else if (report.type === "BROKEN_MEDIA") {
               let mediaData: {
                 target?: "ORIGINAL" | "TRANSLATED";
@@ -647,124 +627,48 @@ export async function POST(req: NextRequest) {
               });
             }
 
-            // GỬI PATCH ĐỂ ĐỔI MÀU EMBED VÀ XÓA NÚT BẤM (COMPONENTS: [])
-            const patchRes = await fetch(
-              `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
-              {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  embeds: [
-                    {
-                      title: `✅ Report #${report.id} APPROVED`,
-                      color: 0x22c55e,
-                      fields: [
-                        {
-                          name: "Original Post ID",
-                          value: `\`${targetOriginalPostId}\``,
-                          inline: true,
-                        },
-                        {
-                          name: "Type",
-                          value: `\`${report.type}\``,
-                          inline: true,
-                        },
-                        {
-                          name: "Approved By",
-                          value: `**${modUsername}**`,
-                          inline: true,
-                        },
-                        { name: "Applied Action", value: appliedDetails },
-                      ],
-                      footer: {
-                        text: "Umazing Index • Status Updated",
+            // Gửi PATCH cập nhật embed thành công và gỡ nút
+            await fetch(webhookEditUrl, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                embeds: [
+                  {
+                    title: `✅ Report #${report.id} APPROVED`,
+                    color: 0x22c55e,
+                    fields: [
+                      {
+                        name: "Original Post ID",
+                        value: `\`${targetOriginalPostId}\``,
+                        inline: true,
                       },
-                      timestamp: new Date().toISOString(),
+                      {
+                        name: "Type",
+                        value: `\`${report.type}\``,
+                        inline: true,
+                      },
+                      {
+                        name: "Approved By",
+                        value: `**${modUsername}**`,
+                        inline: true,
+                      },
+                      { name: "Applied Action", value: appliedDetails },
+                    ],
+                    footer: {
+                      text: "Umazing Index • Status Updated",
                     },
-                  ],
-                  components: [],
-                }),
-              },
-            );
-
-            if (!patchRes.ok) {
-              console.error(
-                "Failed to patch Discord original message:",
-                await patchRes.text(),
-              );
-            }
-          } catch (err) {
-            console.error("Background task error:", err);
-
-            // Rollback trạng thái về PENDING nếu gặp sự cố
-            await prisma.comicReport.update({
-              where: { id: reportId },
-              data: {
-                status: "PENDING",
-                handledBy: null,
-              },
+                    timestamp: new Date().toISOString(),
+                  },
+                ],
+                components: [],
+              }),
             });
-
-            const { reason, suggestion } = formatFriendlyError(err);
-
-            await fetch(
-              `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
-              {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  embeds: [
-                    {
-                      title: `⚠️ Approval Failed: Report #${report.id}`,
-                      color: 0xf59e0b,
-                      fields: [
-                        { name: "📌 Reason", value: reason, inline: false },
-                        {
-                          name: "💡 Suggestion",
-                          value: suggestion,
-                          inline: false,
-                        },
-                        {
-                          name: "Attempted By",
-                          value: `**${modUsername}**`,
-                          inline: true,
-                        },
-                        {
-                          name: "Action Type",
-                          value: `\`${report.type}\``,
-                          inline: true,
-                        },
-                      ],
-                      footer: {
-                        text: "Umazing Index • Action aborted, report restored to PENDING",
-                      },
-                      timestamp: new Date().toISOString(),
-                    },
-                  ],
-                  components: [],
-                }),
-              },
-            );
           }
-        })(),
-      );
 
-      return deferredResponse;
-    }
-
-    // =============================================================
-    // ACTION 3: REJECT (Atomic Lock)
-    // =============================================================
-    if (action === "reject") {
-      // 1. Phản hồi ngay cho Discord trong 50ms đầu để tắt bộ đếm 3 giây
-      const deferredResponse = NextResponse.json({
-        type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE,
-      });
-
-      // 2. Chuyển toàn bộ tác vụ DB và cập nhật giao diện vào tiến trình ngầm
-      waitUntil(
-        (async () => {
-          try {
+          // =============================================================
+          // ACTION 2: REJECT
+          // =============================================================
+          else if (action === "reject") {
             const lock = await prisma.comicReport.updateMany({
               where: {
                 id: reportId,
@@ -776,94 +680,106 @@ export async function POST(req: NextRequest) {
               },
             });
 
-            // Nếu đã có mod khác xử lý trước đó: gửi thông báo ẩn (ephemeral)
             if (lock.count === 0) {
-              await fetch(
-                `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    content: "⚠️ This report has already been processed.",
-                    flags: 64, // Ephemeral
-                  }),
-                },
-              );
+              await fetch(webhookFollowupUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  content: "⚠️ This report has already been processed.",
+                  flags: 64,
+                }),
+              });
               return;
             }
 
-            // Cập nhật Embed màu đỏ và gỡ bỏ 2 nút bấm
-            const patchRes = await fetch(
-              `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
-              {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  embeds: [
+            await fetch(webhookEditUrl, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                embeds: [
+                  {
+                    title: `❌ Report #${report.id} REJECTED`,
+                    color: 0xef4444,
+                    fields: [
+                      {
+                        name: "Report ID",
+                        value: `\`${report.id}\``,
+                        inline: true,
+                      },
+                      {
+                        name: "Type",
+                        value: `\`${report.type}\``,
+                        inline: true,
+                      },
+                      {
+                        name: "Rejected By",
+                        value: `**${modUsername}**`,
+                        inline: true,
+                      },
+                      {
+                        name: "Submitted Content",
+                        value: report.content || "*(Empty)*",
+                      },
+                    ],
+                    footer: { text: "Umazing Index • Dismissed" },
+                    timestamp: new Date().toISOString(),
+                  },
+                ],
+                components: [],
+              }),
+            });
+          }
+        } catch (err) {
+          console.error("Background task error:", err);
+
+          await prisma.comicReport
+            .update({
+              where: { id: reportId },
+              data: {
+                status: "PENDING",
+                handledBy: null,
+              },
+            })
+            .catch(() => {});
+
+          const { reason, suggestion } = formatFriendlyError(err);
+
+          await fetch(webhookEditUrl, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              embeds: [
+                {
+                  title: `⚠️ Action Failed: Report #${reportId}`,
+                  color: 0xf59e0b,
+                  fields: [
+                    { name: "📌 Reason", value: reason, inline: false },
                     {
-                      title: `❌ Report #${report.id} REJECTED`,
-                      color: 0xef4444,
-                      fields: [
-                        {
-                          name: "Report ID",
-                          value: `\`${report.id}\``,
-                          inline: true,
-                        },
-                        {
-                          name: "Type",
-                          value: `\`${report.type}\``,
-                          inline: true,
-                        },
-                        {
-                          name: "Rejected By",
-                          value: `**${modUsername}**`,
-                          inline: true,
-                        },
-                        {
-                          name: "Submitted Content",
-                          value: report.content || "*(Empty)*",
-                        },
-                      ],
-                      footer: { text: "Umazing Index • Dismissed" },
-                      timestamp: new Date().toISOString(),
+                      name: "💡 Suggestion",
+                      value: suggestion,
+                      inline: false,
+                    },
+                    {
+                      name: "Attempted By",
+                      value: `**${modUsername}**`,
+                      inline: true,
                     },
                   ],
-                  components: [], // Xóa hoàn toàn các nút bấm
-                }),
-              },
-            );
+                  footer: {
+                    text: "Umazing Index • Action aborted, report restored to PENDING",
+                  },
+                  timestamp: new Date().toISOString(),
+                },
+              ],
+              components: [],
+            }),
+          });
+        }
+      })(),
+    );
 
-            if (!patchRes.ok) {
-              console.error(
-                "Failed to patch Discord rejection message:",
-                await patchRes.text(),
-              );
-            }
-          } catch (err) {
-            console.error("Background rejection error:", err);
-
-            // Rollback lại PENDING nếu gặp lỗi hệ thống
-            await prisma.comicReport.update({
-              where: { id: reportId },
-              data: { status: "PENDING", handledBy: null },
-            });
-
-            await fetch(
-              `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
-              {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  content: `⚠️ Failed to reject report #${report.id}. Please try again later.`,
-                }),
-              },
-            );
-          }
-        })(),
-      );
-
-      return deferredResponse;
-    }
+    // TRẢ VỀ CHO DISCORD NGAY
+    return immediateResponse;
   }
 
   return NextResponse.json({ error: "Unhandled interaction" }, { status: 400 });
