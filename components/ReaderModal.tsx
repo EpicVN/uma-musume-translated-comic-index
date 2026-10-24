@@ -53,11 +53,22 @@ export default function ReaderModal({
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
 
+  // 🌟 1. Dùng Ref để lưu các hàm điều hướng, tránh re-bind listener khi props thay đổi
+  const navRefs = useRef({ onNext, onPrev, onClose, hasNext, hasPrev });
   useEffect(() => {
-    if (!isOpen || !post) return;
+    navRefs.current = { onNext, onPrev, onClose, hasNext, hasPrev };
+  });
 
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+  // 🌟 2. LƯU LỊCH SỬ ĐỌC: Chỉ chạy đúng 1 lần cho mỗi bài (chặn đứng vòng lặp vô hạn)
+  const currentPostKey = post?.transId || post?.id;
+  const lastRecordedKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !post || !currentPostKey) return;
+
+    // Nếu bài này đã được ghi vào History rồi thì bỏ qua
+    if (lastRecordedKeyRef.current === currentPostKey) return;
+    lastRecordedKeyRef.current = currentPostKey;
 
     const totalPages =
       post.transMediaUrls.length > 0
@@ -68,6 +79,7 @@ export default function ReaderModal({
 
     recordProgress({
       tweetId: post.transId,
+      origId: post.origId || post.id,
       title: `${post.artistName} (TL by ${formatHandle(post.translatorName)})`,
       coverImage: post.transMediaUrls[0] || post.origMediaUrls[0] || undefined,
       artistName: post.artistName,
@@ -75,24 +87,32 @@ export default function ReaderModal({
       lastReadPageIndex: 0,
       totalPages,
     });
+  }, [isOpen, post, currentPostKey, recordProgress]);
+
+  // 🌟 3. PHÍM TẮT & KHOÁ CUỘN TRANG: Tách riêng, không phụ thuộc vào recordProgress
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName))
         return;
 
       if (e.key === "ArrowRight") {
-        if (hasNext) {
+        if (navRefs.current.hasNext) {
           e.preventDefault();
-          onNext();
+          navRefs.current.onNext();
         }
       } else if (e.key === "ArrowLeft") {
-        if (hasPrev) {
+        if (navRefs.current.hasPrev) {
           e.preventDefault();
-          onPrev();
+          navRefs.current.onPrev();
         }
       } else if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        navRefs.current.onClose();
       }
     };
 
@@ -101,7 +121,7 @@ export default function ReaderModal({
       document.body.style.overflow = originalOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen, post, hasNext, hasPrev, onNext, onPrev, onClose, recordProgress]);
+  }, [isOpen]);
 
   // Touch gesture handlers for mobile devices
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -413,7 +433,7 @@ export default function ReaderModal({
                 <div className="flex flex-col gap-4 sm:gap-6 w-full max-w-lg">
                   {post.origMediaUrls.map((url, idx) => (
                     <div
-                      key={idx}
+                      key={url || idx}
                       className="relative w-full rounded-2xl overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.5)] ring-1 ring-white/10 group bg-[#050b14]"
                     >
                       <Image
@@ -424,10 +444,11 @@ export default function ReaderModal({
                         width={0}
                         height={0}
                         sizes="(max-width: 768px) 100vw, 500px"
-                        style={{ width: "100%", height: "auto" }}
                         loading="lazy"
                         unoptimized
                       />
+
+                      {/* Badge số trang góc trên phải */}
                       <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white/50 text-[10px] font-black px-2 py-0.5 rounded-lg border border-white/10 pointer-events-none">
                         P.{idx + 1}
                       </div>
@@ -493,7 +514,11 @@ export default function ReaderModal({
                         width={0}
                         height={0}
                         sizes="(max-width: 768px) 100vw, 500px"
-                        style={{ width: "100%", height: "auto" }}
+                        style={{
+                          position: "relative",
+                          width: "100%",
+                          height: "auto",
+                        }}
                         loading="lazy"
                         unoptimized
                       />

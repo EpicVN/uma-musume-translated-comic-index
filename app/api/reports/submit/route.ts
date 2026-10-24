@@ -68,7 +68,25 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 4. Định dạng nội dung hiển thị thân thiện, dễ đọc cho Mod trên Discord
+    // 4. Tạo URL bài viết chuẩn theo Cách 2 (/post/[origId]?tl=[transId])
+    const targetPost = await prisma.translatedPost.findFirst({
+      where: {
+        OR: [{ id: postId }, { tweetId: postId }],
+      },
+      select: {
+        id: true,
+        originalPostId: true,
+        originalPost: { select: { id: true } },
+      },
+    });
+
+    const origId = targetPost?.originalPost?.id || targetPost?.originalPostId;
+    const comicLink =
+      targetPost && origId
+        ? `${baseUrl}/post/${origId}?tl=${targetPost.id}`
+        : `${baseUrl}/post/${postId}`;
+
+    // 5. Định dạng nội dung hiển thị thân thiện, dễ đọc cho Mod trên Discord
     let displayType = report.type.replace("_", " ");
     let formattedChange = report.content;
 
@@ -124,7 +142,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 5. Cấu trúc Payload gửi sang Discord API
+    // 6. Cấu trúc Payload gửi sang Discord API
     const discordPayload = {
       embeds: [
         {
@@ -148,7 +166,7 @@ export async function POST(req: NextRequest) {
             },
             {
               name: "Comic Link",
-              value: `[🔗 Click to view comic on web](${baseUrl}/post/${report.postId})`,
+              value: `[🔗 Click to view comic on web](${comicLink})`,
               inline: false,
             },
           ],
@@ -179,7 +197,7 @@ export async function POST(req: NextRequest) {
       ],
     };
 
-    // 6. Gửi tin nhắn vào kênh Discord qua Bot Token hoặc Webhook
+    // 7. Gửi tin nhắn vào kênh Discord qua Bot Token hoặc Webhook
     const channelId = process.env.DISCORD_CHANNEL_ID;
     const botToken = process.env.DISCORD_BOT_TOKEN;
     const webhookUrl = process.env.DISCORD_WEBHOOK_URL;

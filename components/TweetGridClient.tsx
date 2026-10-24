@@ -26,33 +26,42 @@ export default function TweetGridClient({ posts }: TweetGridClientProps) {
     }
   }, [searchParams, router]);
 
-  // 2. Khi click vào Card: Đẩy URL sang /post/[id] kèm toàn bộ query param của bộ lọc
-  const handleOpenReader = (targetId: string) => {
-    const currentQuery = searchParams.toString()
-      ? `?${searchParams.toString()}`
-      : "";
+  // 2. Khi click vào Card: Đẩy URL sang /post/[origId] kèm ?tl=[transId] và toàn bộ bộ lọc
+  const handleOpenReader = (origId: string, transId?: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (transId) {
+      params.set("tl", transId);
+    }
+    const queryString = params.toString() ? `?${params.toString()}` : "";
 
-    router.push(`/post/${targetId}${currentQuery}`, { scroll: false });
+    router.push(`/post/${origId}${queryString}`, { scroll: false });
   };
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4 md:gap-5 items-start">
-      {posts.map((post, index) => (
-        <TweetGridCard
-          key={post.id}
-          origId={post.origId}
-          transId={post.transId}
-          artistName={post.artistName}
-          translatorName={post.translatorName}
-          language={post.language}
-          tags={post.tags}
-          postedAt={post.postedAt}
-          priority={index < 4}
-          origMediaUrls={post.origMediaUrls}
-          transMediaUrls={post.transMediaUrls}
-          onOpenReader={() => handleOpenReader(post.origId || post.id)}
-        />
-      ))}
+      {posts.map((post, index) => {
+        // Xác định ID bài gốc và ID bản dịch (có fallback an toàn)
+        const targetOrigId = post.origId || post.id;
+        const targetTransId = post.transId || post.id;
+
+        return (
+          <TweetGridCard
+            key={post.id}
+            origId={targetOrigId}
+            transId={targetTransId}
+            artistName={post.artistName}
+            translatorName={post.translatorName}
+            language={post.language}
+            tags={post.tags}
+            postedAt={post.postedAt}
+            priority={index < 4}
+            origMediaUrls={post.origMediaUrls}
+            transMediaUrls={post.transMediaUrls}
+            // 👉 ĐÃ SỬA: Bổ sung targetTransId làm tham số thứ 2
+            onOpenReader={() => handleOpenReader(targetOrigId, targetTransId)}
+          />
+        );
+      })}
     </div>
   );
 }

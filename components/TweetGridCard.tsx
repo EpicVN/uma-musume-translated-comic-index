@@ -6,6 +6,7 @@ import BookmarkButton from "@/components/BookmarkButton";
 import ReportModal from "@/components/ReportModal";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useMemo } from "react";
 
 interface TagItem {
   id: string;
@@ -26,6 +27,7 @@ export interface TweetGridCardProps {
   origMediaUrls?: string[];
   transMediaUrls?: string[];
   onOpenReader?: () => void;
+  from?: string;
 }
 
 function formatHandle(handle: string) {
@@ -43,11 +45,22 @@ export default function TweetGridCard({
   priority = false,
   origMediaUrls = [],
   transMediaUrls = [],
+  from,
 }: TweetGridCardProps) {
   const searchParams = useSearchParams();
-  const currentQuery = searchParams.toString()
-    ? `?${searchParams.toString()}`
-    : "";
+
+  const cardHref = useMemo(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (transId) {
+      params.set("tl", transId);
+    }
+    // 🌟 Gắn thêm cờ nguồn mở truyện nếu có truyền vào
+    if (from) {
+      params.set("from", from);
+    }
+    const queryStr = params.toString() ? `?${params.toString()}` : "";
+    return `/post/${origId}${queryStr}`;
+  }, [searchParams, origId, transId, from]);
 
   const formattedDate = postedAt
     ? format(new Date(postedAt), "MMM d, yyyy")
@@ -77,9 +90,9 @@ export default function TweetGridCard({
         {/* Nửa trên: Thumbnail sạch, không bị phủ gradient đen */}
         <div className="relative aspect-3/4 w-full overflow-hidden bg-[#050b14]">
           <Link
-            href={`/post/${origId}${currentQuery}`}
+            href={cardHref}
             scroll={false}
-            className="block w-full h-full relative"
+            className="absolute inset-0 block"
             prefetch={false}
           >
             {displayThumbnail ? (
@@ -120,6 +133,7 @@ export default function TweetGridCard({
               <BookmarkButton
                 item={{
                   tweetId: transId,
+                  origId,
                   title: `${artistName} (TL by ${formatHandle(translatorName)})`,
                   coverImage: displayThumbnail || undefined,
                   artistName,
@@ -141,7 +155,7 @@ export default function TweetGridCard({
         <div className="p-2.5 flex flex-col gap-2 bg-[#0e1b2a] border-t border-[#1e2d42] flex-1 justify-between">
           <div className="flex flex-col gap-1 min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-[8px] font-black tracking-wider bg-linear-to-r from-[#f43f5e] to-[#be123c] text-white px-1 py-0.5 rounded shadow-xs shrink-0">
+              <span className="text-[8px] font-black tracking-wider bg-gradient-to-r from-[#f43f5e] to-[#be123c] text-white px-1 py-0.5 rounded shadow-xs shrink-0">
                 ART
               </span>
               <span
@@ -154,7 +168,7 @@ export default function TweetGridCard({
 
             {translatorName && (
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[8px] font-black tracking-wider bg-linear-to-r from-[#eab308] to-[#ca8a04] text-white px-1 py-0.5 rounded shadow-xs shrink-0">
+                <span className="text-[8px] font-black tracking-wider bg-gradient-to-r from-[#eab308] to-[#ca8a04] text-white px-1 py-0.5 rounded shadow-xs shrink-0">
                   TL
                 </span>
                 <span
@@ -210,9 +224,9 @@ export default function TweetGridCard({
       {/* ========================================================================= */}
       <div className="hidden md:block group relative w-full aspect-3/4 bg-[#050b14] rounded-2xl overflow-hidden border border-[#1e2d42] transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_10px_30px_rgba(61,180,242,0.25)] hover:border-[#3db4f2]/50 outline-none focus-visible:ring-2 focus-visible:ring-[#3db4f2]">
         <Link
-          href={`/post/${origId}${currentQuery}`}
+          href={cardHref}
           scroll={false}
-          className="group block"
+          className="absolute inset-0 block"
           prefetch={false}
         >
           {displayThumbnail ? (
@@ -250,11 +264,11 @@ export default function TweetGridCard({
           </div>
 
           {/* Gradient Đáy */}
-          <div className="absolute inset-x-0 bottom-0 h-40 bg-linear-to-t from-[#050b14] via-[#050b14]/80 to-transparent pointer-events-none z-10" />
+          <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#050b14] via-[#050b14]/80 to-transparent pointer-events-none z-10" />
         </Link>
 
         {/* Header Overlay (Tags xiên nghiêng) */}
-        <div className="absolute top-0 inset-x-0 p-3 flex items-start justify-between z-20 bg-linear-to-b from-[#0a111a]/90 via-[#0a111a]/50 to-transparent pb-12 pointer-events-none">
+        <div className="absolute top-0 inset-x-0 p-3 flex items-start justify-between z-20 bg-gradient-to-b from-[#0a111a]/90 via-[#0a111a]/50 to-transparent pb-12 pointer-events-none">
           <div className="flex flex-wrap gap-1.5 flex-1 pr-8">
             {tags.length > 0 ? (
               <>
@@ -291,6 +305,7 @@ export default function TweetGridCard({
             <BookmarkButton
               item={{
                 tweetId: transId,
+                origId,
                 title: `${artistName} (TL by ${formatHandle(translatorName)})`,
                 coverImage: displayThumbnail || undefined,
                 artistName,
@@ -306,7 +321,7 @@ export default function TweetGridCard({
           <div className="flex justify-between items-end">
             <div className="flex flex-col gap-1.5 min-w-0 pr-2">
               <div className="flex items-center gap-1.5 drop-shadow-md">
-                <span className="text-[9px] font-black tracking-widest bg-linear-to-r from-[#f43f5e] to-[#be123c] text-white px-1.5 py-0.5 rounded shadow-sm shrink-0">
+                <span className="text-[9px] font-black tracking-widest bg-gradient-to-r from-[#f43f5e] to-[#be123c] text-white px-1.5 py-0.5 rounded shadow-sm shrink-0">
                   ART
                 </span>
                 <span
@@ -317,7 +332,7 @@ export default function TweetGridCard({
                 </span>
               </div>
               <div className="flex items-center gap-1.5 drop-shadow-md">
-                <span className="text-[9px] font-black tracking-widest bg-linear-to-r from-[#eab308] to-[#ca8a04] text-white px-1.5 py-0.5 rounded shadow-sm shrink-0">
+                <span className="text-[9px] font-black tracking-widest bg-gradient-to-r from-[#eab308] to-[#ca8a04] text-white px-1.5 py-0.5 rounded shadow-sm shrink-0">
                   TL
                 </span>
                 <span

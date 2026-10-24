@@ -3,6 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useCallback, ComponentProps, useMemo } from "react";
 import ReaderModal from "@/components/ReaderModal";
+import { useReadingTracker } from "@/hooks/useReadingTracker";
+import { BookmarkItem, ReadingHistoryItem } from "@/types/storage";
 
 type ReaderModalPost = NonNullable<ComponentProps<typeof ReaderModal>["post"]>;
 
@@ -19,31 +21,111 @@ export default function StandaloneReaderView({
 }: StandaloneReaderViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const fromSource = searchParams.get("from"); // 'bookmarks' | 'history' | null
 
-  // Giữ lại toàn bộ query param của bộ lọc (?tag=...&artist=...&sort=...)
-  const queryStr = useMemo(() => {
-    const params = searchParams.toString();
-    return params ? `?${params}` : "";
+  // 1. Lấy dữ liệu client từ localStorage
+  const { bookmarks, history } = useReadingTracker();
+
+  const activeList: (BookmarkItem | ReadingHistoryItem)[] = useMemo(() => {
+    if (fromSource === "bookmarks") return bookmarks;
+    if (fromSource === "history") return history;
+    return [];
+  }, [fromSource, bookmarks, history]);
+
+  // 2. Định vị bài viết hiện tại trong danh sách Library
+  const { prevLibItem, nextLibItem } = useMemo(() => {
+    if (!fromSource || activeList.length === 0) {
+      return { prevLibItem: null, nextLibItem: null };
+    }
+
+    // Tìm index khớp theo cả origId lẫn tweetId
+    const currentIndex = activeList.findIndex((item) => {
+      const matchOrig =
+        item.origId && (item.origId === post.origId || item.origId === post.id);
+      const matchTrans =
+        item.tweetId === post.transId ||
+        item.tweetId === post.id ||
+        item.tweetId === post.origId;
+
+      return matchOrig || matchTrans;
+    });
+
+    // In log kiểm tra trực tiếp trên F12 Console
+    console.log("🔍 [Library Nav Check]", {
+      fromSource,
+      totalItems: activeList.length,
+      currentIndex,
+      currentPostOrigId: post.origId,
+      currentPostTransId: post.transId,
+    });
+
+    if (currentIndex === -1) {
+      return { prevLibItem: null, nextLibItem: null };
+    }
+
+    // Next: phần tử kế tiếp trong danh sách (index + 1)
+    // Prev: phần tử trước đó trong danh sách (index - 1)
+    const nextItem =
+      currentIndex < activeList.length - 1
+        ? activeList[currentIndex + 1]
+        : null;
+    const prevItem = currentIndex > 0 ? activeList[currentIndex - 1] : null;
+
+    return { prevLibItem: prevItem, nextLibItem: nextItem };
+  }, [fromSource, activeList, post]);
+
+  // Làm sạch query param khi thoát Reader về lại trang chủ
+  const cleanNavQueryStr = useMemo(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("tl");
+    params.delete("from");
+    return params.toString() ? `?${params.toString()}` : "";
   }, [searchParams]);
 
-  // Đóng bài đọc: Trở về trang Feed kèm lại các bộ lọc đang chọn
+  // 3. Đóng bài đọc
   const handleClose = useCallback(() => {
-    router.push(`/${queryStr}`);
-  }, [router, queryStr]);
+    if (fromSource === "bookmarks" || fromSource === "history") {
+      router.push("/library");
+      return;
+    }
+    router.push(`/${cleanNavQueryStr}`);
+  }, [router, fromSource, cleanNavQueryStr]);
 
-  // Chuyển bài kế tiếp giữ nguyên bộ lọc
+  // 4. Chuyển bài kế tiếp
   const handleNext = useCallback(() => {
-    if (nextId) {
-      router.push(`/post/${nextId}${queryStr}`);
+    // 🌟 ƯU TIÊN 1: Chuyển theo thứ tự danh sách Library nếu mở từ Library
+    if (fromSource && nextLibItem) {
+      const targetOrigId = nextLibItem.origId || nextLibItem.tweetId;
+      router.replace(
+        `/post/${targetOrigId}?tl=${nextLibItem.tweetId}&from=${fromSource}`,
+        { scroll: false },
+      );
+      return;
     }
-  }, [router, nextId, queryStr]);
 
-  // Lùi bài trước giữ nguyên bộ lọc
-  const handlePrev = useCallback(() => {
-    if (prevId) {
-      router.push(`/post/${prevId}${queryStr}`);
+    // ƯU TIÊN 2: Chuyển theo Database Server nếu mở từ Feed chính
+    if (nextId) {
+      router.replace(`/post/${nextId}${cleanNavQueryStr}`, { scroll: false });
     }
-  }, [router, prevId, queryStr]);
+  }, [fromSource, nextLibItem, nextId, cleanNavQueryStr, router]);
+
+  // 5. Lùi về bài trước
+  const handlePrev = useCallback(() => {
+    // 🌟 ƯU TIÊN 1: Lùi theo thứ tự danh sách Library nếu mở từ Library
+    if (fromSource && prevLibItem) {
+      const targetOrigId = prevLibItem.origId || prevLibItem.tweetId;
+      router.replace(
+        `/post/${targetOrigId}?tl=${prevLibItem.tweetId}&from=${fromSource}`,
+        { scroll: false },
+      );
+      return;
+    }
+
+    // ƯU TIÊN 2: Lùi theo Database Server nếu mở từ Feed chính
+    if (prevId) {
+      router.replace(`/post/${prevId}${cleanNavQueryStr}`, { scroll: false });
+    }
+  }, [fromSource, prevLibItem, prevId, cleanNavQueryStr, router]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -53,6 +135,10 @@ export default function StandaloneReaderView({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleClose]);
 
+  // Xác định cờ hasNext / hasPrev hiển thị nút bấm
+  const hasNextPost = fromSource ? Boolean(nextLibItem) : Boolean(nextId);
+  const hasPrevPost = fromSource ? Boolean(prevLibItem) : Boolean(prevId);
+
   return (
     <div className="min-h-screen bg-[#0b1622] flex items-center justify-center">
       <ReaderModal
@@ -61,8 +147,8 @@ export default function StandaloneReaderView({
         onClose={handleClose}
         onNext={handleNext}
         onPrev={handlePrev}
-        hasNext={Boolean(nextId)}
-        hasPrev={Boolean(prevId)}
+        hasNext={hasNextPost}
+        hasPrev={hasPrevPost}
       />
     </div>
   );

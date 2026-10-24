@@ -11,7 +11,14 @@ interface Props {
 // 🏷️ Cấu hình dynamic metadata cho SEO & Discord/Twitter Embed
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const { id } = await props.params;
-  const result = await getPostById(id);
+  const searchParams = await props.searchParams;
+
+  // Lấy ID bản dịch được yêu cầu từ URL query (?tl=...)
+  const targetTl =
+    typeof searchParams.tl === "string" ? searchParams.tl : undefined;
+
+  // Truyền kèm { tl: targetTl } để lấy đúng metadata của bản dịch đó
+  const result = await getPostById(id, { tl: targetTl });
 
   if (!result || !result.post) {
     return {
@@ -34,13 +41,17 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
     ? `Uma Musume comic by ${post.artistName}, translated into ${(post.language || "EN").toUpperCase()} by @${cleanTranslator}. Tags: ${tagList}`
     : `Uma Musume comic by ${post.artistName}, translated into ${(post.language || "EN").toUpperCase()} by @${cleanTranslator}.`;
 
-  // Ưu tiên lấy ảnh trang dịch đầu tiên làm cover embed, nếu không có thì lấy ảnh raw
+  // Ưu tiên ảnh của bản dịch được chọn, nếu không có mới lấy ảnh gốc
   const previewImage = post.transMediaUrls[0] || post.origMediaUrls[0];
   const images = previewImage ? [{ url: previewImage, alt: title }] : [];
 
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL || "https://www.uma-index.top";
+
+  // 🔒 CHỐT CHẶN SEO: Mọi bản dịch đều gom chỉ mục về URL gốc duy nhất
   const canonicalUrl = `${siteUrl}/post/${id}`;
+  // Link mở trực tiếp bản dịch này khi chia sẻ lên mạng xã hội
+  const shareUrl = targetTl ? `${canonicalUrl}?tl=${targetTl}` : canonicalUrl;
 
   return {
     title: `${title} | Uma Musume Archive`,
@@ -51,7 +62,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
     openGraph: {
       title,
       description,
-      url: canonicalUrl,
+      url: shareUrl,
       siteName: "Uma Musume Comic Archive",
       type: "article",
       images,
@@ -70,6 +81,9 @@ export default async function StandalonePostPage(props: Props) {
   const { id } = await props.params;
   const searchParams = await props.searchParams;
 
+  const targetTl =
+    typeof searchParams.tl === "string" ? searchParams.tl : undefined;
+
   const filters = {
     q: typeof searchParams.q === "string" ? searchParams.q : undefined,
     tag: typeof searchParams.tag === "string" ? searchParams.tag : undefined,
@@ -80,11 +94,12 @@ export default async function StandalonePostPage(props: Props) {
         ? searchParams.translator
         : undefined,
     sort: typeof searchParams.sort === "string" ? searchParams.sort : undefined,
+    tl: targetTl, // 🌟 Truyền targetTl vào bộ lọc
   };
 
   const result = await getPostById(id, filters);
 
-  if (!result) {
+  if (!result || !result.post) {
     return notFound();
   }
 

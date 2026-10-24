@@ -10,30 +10,54 @@ export interface PostFilterParams {
   artist?: string;
   translator?: string;
   sort?: string;
+  tl?: string; // 🌟 Bổ sung tham số tl để nhận diện bản dịch yêu cầu
 }
 
 export async function getPostById(id: string, filters?: PostFilterParams) {
-  // 1. Lấy thông tin bài viết hiện tại
-  const post = await prisma.translatedPost.findFirst({
-    where: {
-      OR: [
-        { id },
-        { tweetId: id },
-        { originalPostId: id },
-        { originalPost: { id } },
-        { originalPost: { tweetId: id } },
-      ],
-    },
-    include: {
-      translator: true,
-      originalPost: {
-        include: {
-          artist: true,
-          tags: { include: { tag: true } },
+  let post = null;
+
+  // 1. Ưu tiên tìm chính xác bản dịch được yêu cầu qua ?tl= (khớp cả CUID lẫn Tweet ID)
+  if (filters?.tl) {
+    post = await prisma.translatedPost.findFirst({
+      where: {
+        OR: [{ id: filters.tl }, { tweetId: filters.tl }],
+      },
+      include: {
+        translator: true,
+        originalPost: {
+          include: {
+            artist: true,
+            tags: { include: { tag: true } },
+          },
         },
       },
-    },
-  });
+    });
+  }
+
+  // Nếu không có ?tl hoặc không tìm thấy bản dịch theo tl -> Fallback tìm theo ID bài gốc
+  if (!post) {
+    post = await prisma.translatedPost.findFirst({
+      where: {
+        OR: [
+          { id },
+          { tweetId: id },
+          { originalPostId: id },
+          { originalPost: { id } },
+          { originalPost: { tweetId: id } },
+        ],
+      },
+      orderBy: { postedAt: "desc" }, // Ưu tiên bản dịch mới nhất nếu có nhiều bản
+      include: {
+        translator: true,
+        originalPost: {
+          include: {
+            artist: true,
+            tags: { include: { tag: true } },
+          },
+        },
+      },
+    });
+  }
 
   if (!post) return null;
 
@@ -102,6 +126,11 @@ export async function getPostById(id: string, filters?: PostFilterParams) {
   }
 
   // 3. Xác định bài Trước (Prev) và bài Sau (Next) theo chiều Sort
+  // 🌟 Chặn không cho Next/Prev nhảy vào các bản dịch khác của chính bài hiện tại
+  const excludeCurrentOriginalPost: Prisma.TranslatedPostWhereInput = {
+    originalPostId: { not: post.originalPostId },
+  };
+
   const sort = filters?.sort || "newest";
   let prevWhere: Prisma.TranslatedPostWhereInput = {};
   let nextWhere: Prisma.TranslatedPostWhereInput = {};
@@ -109,14 +138,22 @@ export async function getPostById(id: string, filters?: PostFilterParams) {
   let nextOrderBy: Prisma.TranslatedPostOrderByWithRelationInput = {};
 
   if (sort === "oldest") {
-    // Cũ -> Mới: Next là bài mới hơn, Prev là bài cũ hơn
-    prevWhere = { ...filterWhere, postedAt: { lt: post.postedAt } };
+    prevWhere = {
+      ...filterWhere,
+      ...excludeCurrentOriginalPost,
+      postedAt: { lt: post.postedAt },
+    };
     prevOrderBy = { postedAt: "desc" };
-    nextWhere = { ...filterWhere, postedAt: { gt: post.postedAt } };
+    nextWhere = {
+      ...filterWhere,
+      ...excludeCurrentOriginalPost,
+      postedAt: { gt: post.postedAt },
+    };
     nextOrderBy = { postedAt: "asc" };
   } else if (sort === "orig_newest") {
     prevWhere = {
       ...filterWhere,
+      ...excludeCurrentOriginalPost,
       originalPost: {
         ...originalPostWhere,
         postedAt: { gt: post.originalPost.postedAt },
@@ -125,6 +162,7 @@ export async function getPostById(id: string, filters?: PostFilterParams) {
     prevOrderBy = { originalPost: { postedAt: "asc" } };
     nextWhere = {
       ...filterWhere,
+      ...excludeCurrentOriginalPost,
       originalPost: {
         ...originalPostWhere,
         postedAt: { lt: post.originalPost.postedAt },
@@ -134,6 +172,7 @@ export async function getPostById(id: string, filters?: PostFilterParams) {
   } else if (sort === "orig_oldest") {
     prevWhere = {
       ...filterWhere,
+      ...excludeCurrentOriginalPost,
       originalPost: {
         ...originalPostWhere,
         postedAt: { lt: post.originalPost.postedAt },
@@ -142,6 +181,7 @@ export async function getPostById(id: string, filters?: PostFilterParams) {
     prevOrderBy = { originalPost: { postedAt: "desc" } };
     nextWhere = {
       ...filterWhere,
+      ...excludeCurrentOriginalPost,
       originalPost: {
         ...originalPostWhere,
         postedAt: { gt: post.originalPost.postedAt },
@@ -149,10 +189,18 @@ export async function getPostById(id: string, filters?: PostFilterParams) {
     };
     nextOrderBy = { originalPost: { postedAt: "asc" } };
   } else {
-    // Mặc định (newest): Mới -> Cũ (Next là bài cũ hơn, Prev là bài mới hơn)
-    prevWhere = { ...filterWhere, postedAt: { gt: post.postedAt } };
+    // Mặc định (newest): Mới -> Cũ
+    prevWhere = {
+      ...filterWhere,
+      ...excludeCurrentOriginalPost,
+      postedAt: { gt: post.postedAt },
+    };
     prevOrderBy = { postedAt: "asc" };
-    nextWhere = { ...filterWhere, postedAt: { lt: post.postedAt } };
+    nextWhere = {
+      ...filterWhere,
+      ...excludeCurrentOriginalPost,
+      postedAt: { lt: post.postedAt },
+    };
     nextOrderBy = { postedAt: "desc" };
   }
 

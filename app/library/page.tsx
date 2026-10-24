@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useSyncExternalStore, useEffect } from "react";
+import { useState, useSyncExternalStore, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation"; // 🌟 1. Import useRouter
 import {
   useReadingTracker,
   MAX_BOOKMARKS_ITEMS,
@@ -12,6 +13,7 @@ import { BookmarkItem, ReadingHistoryItem } from "@/types/storage";
 const emptySubscribe = () => () => {};
 
 export default function LibraryPage() {
+  const router = useRouter(); // 🌟 Khởi tạo router
   const isHydrated = useSyncExternalStore(
     emptySubscribe,
     () => true,
@@ -31,6 +33,21 @@ export default function LibraryPage() {
   const isBookmarkFull = bookmarks.length >= maxBookmarks;
   const isBookmarkNearFull =
     bookmarks.length >= maxBookmarks * 0.9 && !isBookmarkFull;
+
+  // 🌟 2. Hàm mở Reader trên web chuẩn theo Cách 2
+  // components/LibraryPage.tsx (hoặc file page của Library)
+
+  const handleOpenReader = useCallback(
+    (origId: string, transId?: string) => {
+      const params = new URLSearchParams();
+      if (transId) params.set("tl", transId);
+      // 🌟 Gắn cờ nguồn mở truyện: bookmarks hoặc history
+      params.set("from", activeTab);
+
+      router.push(`/post/${origId}?${params.toString()}`, { scroll: false });
+    },
+    [router, activeTab],
+  );
 
   if (!isHydrated) {
     return (
@@ -56,11 +73,23 @@ export default function LibraryPage() {
       return new Date();
     };
 
+    // 🌟 3. Xác định target ID: Ưu tiên origId nếu có, fallback về tweetId nếu là bookmark cũ
+    const targetOrigId =
+      ("origId" in item && typeof item.origId === "string"
+        ? item.origId
+        : undefined) ||
+      ("originalPostId" in item && typeof item.originalPostId === "string"
+        ? item.originalPostId
+        : undefined) ||
+      item.tweetId;
+    const targetTransId = item.tweetId;
+
     return (
       <TweetGridCard
         key={item.tweetId}
-        transId={item.tweetId}
-        origId=""
+        transId={targetTransId}
+        origId={targetOrigId}
+        from={activeTab} // 🌟 Thêm dòng này để thẻ Link trong card tự gắn ?from=bookmarks hoặc ?from=history
         artistName={item.artistName || "Unknown"}
         translatorName={item.translatorHandle || "Unknown"}
         transMediaUrls={item.coverImage ? [item.coverImage] : []}
@@ -68,9 +97,7 @@ export default function LibraryPage() {
         tags={[]}
         postedAt={getDateVal()}
         priority={false}
-        onOpenReader={() =>
-          window.open(`https://x.com/i/status/${item.tweetId}`, "_blank")
-        }
+        onOpenReader={() => handleOpenReader(targetOrigId, targetTransId)}
       />
     );
   };
@@ -103,7 +130,7 @@ export default function LibraryPage() {
 
             <div className="flex flex-col">
               <h1
-                className="text-xl sm:text-2xl font-black italic tracking-tighter text-transparent bg-clip-text bg-linear-to-r from-white to-[#cbd5e1] drop-shadow-sm uppercase pr-3"
+                className="text-2xl font-black italic tracking-tighter text-transparent bg-clip-text bg-linear-to-r from-white via-[#e2e8f0] to-[#94a3b8] transition-all duration-300 group-hover:from-[#3db4f2] group-hover:via-[#60a5fa] group-hover:to-[#b784eb] pr-3"
                 style={{ fontFamily: "'CCWildWords Roman', sans-serif" }}
               >
                 YOUR LIBRARY

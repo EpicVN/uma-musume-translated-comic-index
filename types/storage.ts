@@ -1,5 +1,6 @@
 export interface ReadingHistoryItem {
   tweetId: string;
+  origId?: string; // 🌟 Thêm origId để lưu ID bài gốc của Comic
   title?: string;
   coverImage?: string;
   artistName?: string;
@@ -11,6 +12,7 @@ export interface ReadingHistoryItem {
 
 export interface BookmarkItem {
   tweetId: string;
+  origId?: string; // 🌟 Thêm origId để lưu ID bài gốc của Comic
   title?: string;
   coverImage?: string;
   artistName?: string;
