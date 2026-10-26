@@ -349,5 +349,35 @@
             "ウマ娘英訳"
         ],
         "requireKeywordMatch": true
+    },
+    {
+        "name": "Bomberic",
+        "handle": "Real_Bomberic",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "dat",
+        "handle": "dat1nubiy",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
+    },
+    {
+        "name": "Lu/Ciel",
+        "handle": "LuCielMera",
+        "language": "en",
+        "keywords": [
+            "UmaTranslations",
+            "ウマ娘英訳"
+        ],
+        "requireKeywordMatch": true
     }
 ]

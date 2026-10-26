@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma skills sync || exit 0"
+    "postinstall": "prisma skills sync || exit 0",
+    "sync:tags": "npx tsx scripts/sync-characters.ts"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",

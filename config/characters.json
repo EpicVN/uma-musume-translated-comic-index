@@ -1862,5 +1862,13 @@
         "aliases": [
             "obey your master"
         ]
+    },
+    {
+        "slug": "azuma",
+        "name": "Azuma",
+        "jp": "吾妻",
+        "aliases": [
+            "azuma"
+        ]
     }
 ]
