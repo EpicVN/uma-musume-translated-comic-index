@@ -6,6 +6,7 @@ import GlobalToast from "@/components/GlobalToast";
 import Footer from "@/components/Footer";
 // import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import MaintenanceBanner from "../components/MaintenanceBanner";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://uma-index.top"),
@@ -66,10 +67,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-  modal, // 👈 1. Nhận thêm slot modal từ thư mục @modal
+  modal,
 }: {
   children: React.ReactNode;
-  modal: React.ReactNode; // 👈 2. Định nghĩa kiểu dữ liệu cho modal
+  modal: React.ReactNode;
 }) {
   return (
     <html lang="en">
@@ -86,8 +87,9 @@ export default function RootLayout({
 
         <div className="flex-1 flex flex-col">
           <PageLoadingOverlay>
+            <MaintenanceBanner />
             {children}
-            {modal} {/* 👈 3. Render modal song song cùng trang nền */}
+            {modal}
             {/* <Analytics /> */}
             <GlobalToast />
             <SpeedInsights />
