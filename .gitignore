@@ -53,3 +53,7 @@ scripts/test-characters.ts
 scripts/discord-test.ts
 scripts/scrape-tweets.ts
 scripts/run-query.ts
+scripts/merge-db.ts
+
+
+backup_main.sql

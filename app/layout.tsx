@@ -87,7 +87,7 @@ export default function RootLayout({
 
         <div className="flex-1 flex flex-col">
           <PageLoadingOverlay>
-            <MaintenanceBanner />
+            {/* <MaintenanceBanner /> */}
             {children}
             {modal}
             {/* <Analytics /> */}
