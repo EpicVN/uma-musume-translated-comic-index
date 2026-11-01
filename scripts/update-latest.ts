@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { scrapeTweetMetadata, TweetData } from "../lib/scraper";
 import { scrapePixivMetadata } from "../lib/scraper-pixiv";
 import { autoTagPost } from "../lib/tagger";
@@ -303,10 +303,52 @@ function matchesTranslationKeywords(
 
 function extractOriginalPixivUrl(text: string): string | undefined {
   if (!text) return undefined;
+  // Thêm \d vào lookahead để chống regex backtracking nhả số cuối khi gặp "..."
   const match = text.match(
-    /https?:\/\/(?:www\.)?pixiv\.net\/(?:en\/)?artworks\/\d+/i,
+    /(?:https?:\/\/)?(?:www\.)?pixiv\.net\/(?:en\/)?artworks\/(\d+)(?!\d|\.\.\.|…)/i,
   );
-  return match ? match[0] : undefined;
+  if (match) {
+    return `https://www.pixiv.net/artworks/${match[1]}`;
+  }
+  return undefined;
+}
+
+async function expandTcoLinksInText(text: string): Promise<string> {
+  if (!text || !text.includes("t.co/")) return text;
+  const matches = Array.from(text.matchAll(/https?:\/\/t\.co\/[a-zA-Z0-9]+/gi));
+  let updatedText = text;
+
+  for (const m of matches) {
+    const shortUrl = m[0];
+    try {
+      const res = await fetch(shortUrl, {
+        method: "GET",
+        redirect: "follow",
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        },
+      });
+
+      if (res.url && !res.url.includes("t.co/")) {
+        updatedText += ` ${res.url}`;
+      } else {
+        // Trường hợp t.co trả về 200 OK kèm HTML/JS redirect
+        const html = await res.text();
+        const urlMatch =
+          html.match(/URL=(https?:\/\/[^"'\s>]+)/i) ||
+          html.match(/<title>(https?:\/\/[^<]+)<\/title>/i) ||
+          html.match(/location\.replace\(["'](https?:\/\/[^"']+)["']\)/i);
+
+        if (urlMatch?.[1]) {
+          updatedText += ` ${urlMatch[1].replace(/\\\//g, "/")}`;
+        }
+      }
+    } catch {
+      // Bỏ qua nếu mạng lỗi
+    }
+  }
+  return updatedText;
 }
 
 interface QuotedResultContainer {
@@ -463,32 +505,49 @@ async function fetchOriginalTweetUrlWithNetwork(
     if (!originalUrl) {
       originalUrl = await page.evaluate(
         ({ currId, transHandle }) => {
-          const quoteContainers = document.querySelectorAll(
-            '[data-testid="quoteTweet"], [data-testid="tweetQuote"], div[aria-labelledby*="id__"][role="link"], div[tabindex="0"][role="link"]',
+          const allArticles = Array.from(
+            document.querySelectorAll('article[data-testid="tweet"]'),
+          );
+          const currentArticleIndex = allArticles.findIndex((art) =>
+            art.querySelector(`a[href*="/status/${currId}"]`),
           );
 
-          for (const box of Array.from(quoteContainers)) {
-            const links = Array.from(
-              box.querySelectorAll('a[href*="/status/"]'),
+          const currentArt =
+            currentArticleIndex >= 0
+              ? allArticles[currentArticleIndex]
+              : allArticles[0];
+
+          // 1. Tìm trong thẻ trích dẫn (Quote Tweet) NHƯNG CHỈ BÊN TRONG currentArt
+          if (currentArt) {
+            const quoteContainers = currentArt.querySelectorAll(
+              '[data-testid="quoteTweet"], [data-testid="tweetQuote"], div[role="link"]',
             );
-            for (const a of links) {
-              const href = a.getAttribute("href") || "";
-              const m = href.match(
-                /(?:twitter\.com|x\.com)?\/([a-zA-Z0-9_]+)\/status\/(\d+)/i,
+
+            for (const box of Array.from(quoteContainers)) {
+              const links = Array.from(
+                box.querySelectorAll('a[href*="/status/"]'),
               );
-              if (m && m[2] !== currId && m[1].toLowerCase() !== transHandle) {
-                return `https://x.com/${m[1]}/status/${m[2]}`;
+              for (const a of links) {
+                const href = a.getAttribute("href") || "";
+                const m = href.match(
+                  /(?:twitter\.com|x\.com)?\/([a-zA-Z0-9_]+)\/status\/(\d+)/i,
+                );
+                if (
+                  m &&
+                  m[2] !== currId &&
+                  m[1].toLowerCase() !== transHandle
+                ) {
+                  return `https://x.com/${m[1]}/status/${m[2]}`;
+                }
               }
             }
           }
 
-          const allLinks = Array.from(
-            document.querySelectorAll(
-              'article[data-testid="tweet"] a[href*="/status/"]',
-            ),
-          );
-          for (const a of allLinks) {
-            const href = a.getAttribute("href") || "";
+          // 2. Nếu là bài Reply: Chỉ lấy bài cha nằm NGAY TRƯỚC bài hiện tại
+          if (currentArticleIndex > 0) {
+            const parentArt = allArticles[currentArticleIndex - 1];
+            const parentLink = parentArt.querySelector('a[href*="/status/"]');
+            const href = parentLink?.getAttribute("href") || "";
             const m = href.match(
               /(?:twitter\.com|x\.com)?\/([a-zA-Z0-9_]+)\/status\/(\d+)/i,
             );
@@ -515,6 +574,64 @@ async function fetchOriginalTweetUrlWithNetwork(
   return originalUrl;
 }
 
+// =========================================================================
+// 🌟 CÁC INTERFACE ĐỊNH HÌNH DỮ LIỆU GRAPHQL (KHÔNG DÙNG ANY)
+// =========================================================================
+interface TwitterUrlEntity {
+  url?: string;
+  expanded_url?: string;
+}
+
+interface TwitterMediaEntity {
+  type?: string;
+  media_url_https?: string;
+}
+
+interface TwitterLegacyTweet {
+  full_text?: string;
+  created_at?: string;
+  entities?: {
+    urls?: TwitterUrlEntity[];
+    media?: TwitterMediaEntity[];
+  };
+  extended_entities?: {
+    media?: TwitterMediaEntity[];
+  };
+}
+
+interface TwitterUserResult {
+  core?: {
+    screen_name?: string;
+  };
+  legacy?: {
+    name?: string;
+    screen_name?: string;
+  };
+}
+
+interface TwitterTargetTweet {
+  rest_id?: string;
+  tweet?: {
+    rest_id?: string;
+  };
+  legacy?: TwitterLegacyTweet;
+  core?: {
+    user_results?: {
+      result?: TwitterUserResult;
+    };
+  };
+  note_tweet?: {
+    note_tweet_results?: {
+      result?: {
+        text?: string;
+      };
+    };
+  };
+}
+
+// =========================================================================
+// 🌟 HÀM CÀO DỮ LIỆU NSFW & GIẢI MÃ LINK QUA TRÌNH DUYỆT
+// =========================================================================
 async function scrapeNSFWWithBrowser(
   context: BrowserContext,
   tweetUrl: string,
@@ -524,6 +641,96 @@ async function scrapeNSFWWithBrowser(
   const tweetId = match[1];
 
   const page = await context.newPage();
+
+  // Dùng container object để TypeScript không thu hẹp kiểu về `never`
+  const captured = {
+    graphqlTweetData: null as Partial<ExtendedTweetData> | null,
+  };
+
+  const responseHandler = async (response: Response) => {
+    try {
+      const url = response.url();
+      if (
+        url.includes("/graphql/") &&
+        (url.includes("TweetDetail") ||
+          url.includes("TweetResultByRestId") ||
+          url.includes("Status"))
+      ) {
+        const json: unknown = await response.json();
+
+        // Đệ quy kiểu an toàn tìm đúng tweet có rest_id trùng khớp
+        const findTweet = (obj: unknown): TwitterTargetTweet | null => {
+          if (!obj || typeof obj !== "object") return null;
+          const record = obj as Record<string, unknown>;
+
+          if (record.rest_id === tweetId) {
+            return record as unknown as TwitterTargetTweet;
+          }
+
+          if (record.tweet && typeof record.tweet === "object") {
+            const nested = record.tweet as Record<string, unknown>;
+            if (nested.rest_id === tweetId) {
+              return nested as unknown as TwitterTargetTweet;
+            }
+          }
+
+          for (const key of Object.keys(record)) {
+            const res = findTweet(record[key]);
+            if (res) return res;
+          }
+          return null;
+        };
+
+        const target = findTweet(json);
+        if (target) {
+          const legacy = target.legacy || {};
+          const userResult = target.core?.user_results?.result || {};
+          const userLegacy = userResult.legacy || {};
+          const noteTweet = target.note_tweet?.note_tweet_results?.result?.text;
+
+          // 1. Giải mã toàn bộ link rút gọn t.co thành expanded_url nguyên bản
+          let fullText = noteTweet || legacy.full_text || "";
+          if (legacy.entities?.urls?.length) {
+            for (const u of legacy.entities.urls) {
+              if (u.url && u.expanded_url) {
+                fullText = fullText.replaceAll(u.url, u.expanded_url);
+              }
+            }
+          }
+
+          // 2. Lấy toàn bộ ảnh chất lượng gốc
+          const photos: string[] = [];
+          const mediaList =
+            legacy.extended_entities?.media || legacy.entities?.media || [];
+          for (const m of mediaList) {
+            if (m.type === "photo" && m.media_url_https) {
+              const orig = m.media_url_https.includes("?")
+                ? m.media_url_https.replace(/name=[a-zA-Z0-9]+/, "name=orig")
+                : `${m.media_url_https}?name=orig`;
+              if (!photos.includes(orig)) photos.push(orig);
+            }
+          }
+
+          captured.graphqlTweetData = {
+            tweetId,
+            tweetUrl: `https://x.com/i/status/${tweetId}`,
+            name: userLegacy.name || userResult.core?.screen_name || "Unknown",
+            handle: userLegacy.screen_name
+              ? `@${userLegacy.screen_name}`
+              : "@unknown",
+            postedAt: legacy.created_at,
+            text: fullText,
+            photos,
+            hasMedia: photos.length > 0,
+          };
+        }
+      }
+    } catch {
+      // Bỏ qua lỗi bắt gói tin phụ
+    }
+  };
+
+  page.on("response", responseHandler);
 
   try {
     await page.goto(tweetUrl, {
@@ -535,6 +742,7 @@ async function scrapeNSFWWithBrowser(
       .waitForSelector('article[data-testid="tweet"]', { timeout: 8000 })
       .catch(() => {});
 
+    // Vượt qua cảnh báo NSFW / Sensitive content
     for (let attempt = 0; attempt < 3; attempt++) {
       await clickAllNSFWBypassButtons(page);
       await page.mouse.wheel(0, 300);
@@ -543,20 +751,30 @@ async function scrapeNSFWWithBrowser(
       const hasImages = await page
         .locator('article[data-testid="tweet"] img[src*="pbs.twimg.com/media"]')
         .count();
-      if (hasImages > 0) {
-        break;
-      }
+      if (hasImages > 0) break;
     }
 
     await page.waitForTimeout(600);
 
-    const data = await page.evaluate((id) => {
-      const art = document.querySelector('article[data-testid="tweet"]');
+    // 🌟 Quét DOM: Khóa chặt vào article của tweetId này (loại trừ hoàn toàn Discover more và reply khác)
+    const domData = await page.evaluate((id: string) => {
+      const allArticles = Array.from(
+        document.querySelectorAll('article[data-testid="tweet"]'),
+      );
+
+      const art =
+        allArticles.find((a) => {
+          const link = a.querySelector(`a[href*="/status/${id}"]`);
+          return Boolean(link);
+        }) || allArticles[0];
+
       if (!art) return null;
 
       const quoteBlock = art.querySelector(
         '[data-testid="quoteTweet"], [data-testid="tweetQuote"]',
       );
+
+      // 1. Tác giả
       const allUserBlocks = Array.from(
         art.querySelectorAll('[data-testid="User-Name"]'),
       );
@@ -587,25 +805,40 @@ async function scrapeNSFWWithBrowser(
         const handleSpan = spans.find((s) =>
           s.textContent?.trim().startsWith("@"),
         );
-        if (handleSpan && handleSpan.textContent) {
+        if (handleSpan?.textContent) {
           handle = handleSpan.textContent.trim();
         }
       }
 
+      // 2. Nội dung văn bản và gom các link t.co
       const allTextEls = Array.from(
         art.querySelectorAll('[data-testid="tweetText"]'),
       );
       const mainTextEl =
         allTextEls.find((el) => !quoteBlock || !quoteBlock.contains(el)) ||
         allTextEls[0];
+
       const text = mainTextEl?.textContent || "";
 
+      const tCoLinks: string[] = [];
+      if (mainTextEl) {
+        const anchors = Array.from(mainTextEl.querySelectorAll("a"));
+        for (const a of anchors) {
+          const href = a.getAttribute("href") || "";
+          if (href.includes("t.co/")) {
+            tCoLinks.push(href);
+          }
+        }
+      }
+
+      // 3. Thời gian đăng bài
       const timeEl = art.querySelector("time");
       const postedAt =
         timeEl?.getAttribute("datetime") ||
         document.querySelector("article time")?.getAttribute("datetime") ||
         new Date().toISOString();
 
+      // 4. Danh sách ảnh
       const photos: string[] = [];
       const images = Array.from(
         art.querySelectorAll('img[src*="pbs.twimg.com/media"]'),
@@ -628,12 +861,60 @@ async function scrapeNSFWWithBrowser(
         handle,
         postedAt,
         text,
+        tCoLinks,
         hasMedia: photos.length > 0,
         photos,
       };
     }, tweetId);
 
-    return data;
+    // 🌟 ƯU TIÊN 1: Dữ liệu bóc tách từ GraphQL
+    const gqlData = captured.graphqlTweetData;
+    if (gqlData && (gqlData.photos?.length || 0) > 0) {
+      return {
+        tweetId: gqlData.tweetId || tweetId,
+        tweetUrl: gqlData.tweetUrl || tweetUrl,
+        name: gqlData.name || domData?.name || "Unknown",
+        handle: gqlData.handle || domData?.handle || "@unknown",
+        postedAt:
+          gqlData.postedAt || domData?.postedAt || new Date().toISOString(),
+        text: gqlData.text || domData?.text || "",
+        hasMedia: true,
+        photos: gqlData.photos || domData?.photos || [],
+      };
+    }
+
+    // 🌟 ƯU TIÊN 2: Dữ liệu DOM (giải mã thêm redirect link t.co nếu có)
+    if (domData && domData.tCoLinks && domData.tCoLinks.length > 0) {
+      for (const shortLink of domData.tCoLinks) {
+        try {
+          const headRes = await page.request.get(shortLink, {
+            maxRedirects: 5,
+            timeout: 5000,
+          });
+          const resolvedUrl = headRes.url();
+          if (resolvedUrl && !resolvedUrl.includes("t.co/")) {
+            domData.text += ` ${resolvedUrl}`;
+          }
+        } catch {
+          // Bỏ qua lỗi phân giải link
+        }
+      }
+    }
+
+    if (domData) {
+      return {
+        tweetId: domData.tweetId,
+        tweetUrl: domData.tweetUrl,
+        name: domData.name,
+        handle: domData.handle,
+        postedAt: domData.postedAt,
+        text: domData.text,
+        hasMedia: domData.hasMedia,
+        photos: domData.photos,
+      };
+    }
+
+    return null;
   } catch (err) {
     console.error(
       `   ⚠️ Failed to scrape NSFW content via Browser [${tweetId}]:`,
@@ -641,6 +922,7 @@ async function scrapeNSFWWithBrowser(
     );
     return null;
   } finally {
+    page.off("response", responseHandler);
     await page.close().catch(() => {});
   }
 }
@@ -945,16 +1227,32 @@ async function processTranslatorLatest(
       hasSyncedTranslatorName = true;
     }
 
-    // --- TÌM LINK BÀI GỐC CỦA ARTIST ---
+    transData.text = await expandTcoLinksInText(transData.text || "");
+
     // --- TÌM LINK BÀI GỐC CỦA ARTIST (ƯU TIÊN PIXIV NẾU CÓ) ---
-    const originalPixivUrl: string | undefined = extractOriginalPixivUrl(
+    let originalPixivUrl: string | undefined = extractOriginalPixivUrl(
       transData.text || "",
     );
 
+    // Nếu text có nhắc tới pixiv.net nhưng link bị cắt cụt (...), mở trình duyệt lấy link gốc
+    if (!originalPixivUrl && /pixiv\.net/i.test(transData.text || "")) {
+      console.log(
+        `   🔍 ID ${tId}: Phát hiện link Pixiv bị rút gọn (...), đang mở trình duyệt lấy full URL...`,
+      );
+      const fullBrowserData = await scrapeNSFWWithBrowser(
+        context,
+        transTweetUrl,
+      );
+      if (fullBrowserData?.text) {
+        transData.text = await expandTcoLinksInText(fullBrowserData.text);
+        originalPixivUrl = extractOriginalPixivUrl(transData.text);
+      }
+    }
+
     let originalTweetUrl: string | undefined = transData.quotedTweetUrl;
 
-    // Nếu không có link Pixiv trong text, tìm link Twitter
-    if (!originalPixivUrl) {
+    // Chỉ tìm link Twitter nếu KHÔNG có link Pixiv và bài dịch KHÔNG ghi nguồn là pixiv.net
+    if (!originalPixivUrl && !/pixiv\.net/i.test(transData.text || "")) {
       if (!originalTweetUrl) {
         originalTweetUrl = extractOriginalTweetUrl(
           transData.text || "",
@@ -1038,22 +1336,33 @@ async function processTranslatorLatest(
 
         // 2. Lưu bài gốc Pixiv với tiền tố "pixiv-" để tránh đụng độ ID số với Twitter
         const pixivPostId = `pixiv-${pixivData.illustId}`;
-        const originalPost = await prisma.originalPost.upsert({
+        const newPixivMedia = pixivData.mediaUrls || [];
+
+        let originalPost = await prisma.originalPost.findUnique({
           where: { tweetId: pixivPostId },
-          update: {
-            content: pixivData.title || "",
-            mediaUrls: pixivData.mediaUrls || [],
-            artistId: artist.id,
-          },
-          create: {
-            tweetId: pixivPostId,
-            tweetUrl: originalPixivUrl,
-            postedAt: new Date(pixivData.postedAt),
-            content: pixivData.title || "",
-            mediaUrls: pixivData.mediaUrls || [],
-            artistId: artist.id,
-          },
         });
+
+        if (!originalPost) {
+          originalPost = await prisma.originalPost.create({
+            data: {
+              tweetId: pixivPostId,
+              tweetUrl: originalPixivUrl,
+              postedAt: new Date(pixivData.postedAt),
+              content: pixivData.title || "",
+              mediaUrls: newPixivMedia,
+              mediaCount: newPixivMedia.length || 1,
+              artistId: artist.id,
+            },
+          });
+        } else if (newPixivMedia.length > originalPost.mediaUrls.length) {
+          originalPost = await prisma.originalPost.update({
+            where: { id: originalPost.id },
+            data: {
+              mediaUrls: newPixivMedia,
+              mediaCount: newPixivMedia.length,
+            },
+          });
+        }
 
         originalPostId = originalPost.id;
 
@@ -1134,22 +1443,33 @@ async function processTranslatorLatest(
           },
         });
 
-        const originalPost = await prisma.originalPost.upsert({
+        const newOrigPhotos = origData.photos || [];
+
+        let originalPost = await prisma.originalPost.findUnique({
           where: { tweetId: origData.tweetId },
-          update: {
-            content: origData.text || "",
-            mediaUrls: origData.photos || [],
-            artistId: artist.id,
-          },
-          create: {
-            tweetId: origData.tweetId,
-            tweetUrl: origData.tweetUrl,
-            postedAt: parseValidDate(origData.postedAt, origData.tweetId),
-            content: origData.text || "",
-            mediaUrls: origData.photos || [],
-            artistId: artist.id,
-          },
         });
+
+        if (!originalPost) {
+          originalPost = await prisma.originalPost.create({
+            data: {
+              tweetId: origData.tweetId,
+              tweetUrl: origData.tweetUrl,
+              postedAt: parseValidDate(origData.postedAt, origData.tweetId),
+              content: origData.text || "",
+              mediaUrls: newOrigPhotos,
+              mediaCount: newOrigPhotos.length || 1,
+              artistId: artist.id,
+            },
+          });
+        } else if (newOrigPhotos.length > originalPost.mediaUrls.length) {
+          originalPost = await prisma.originalPost.update({
+            where: { id: originalPost.id },
+            data: {
+              mediaUrls: newOrigPhotos,
+              mediaCount: newOrigPhotos.length,
+            },
+          });
+        }
 
         originalPostId = originalPost.id;
         const combinedText = `${transData.text || ""} ${origData.text || ""}`;
@@ -1174,101 +1494,6 @@ async function processTranslatorLatest(
     else {
       console.log(
         `   ⚠️ [${idx + 1}/${tweetIdList.length}] ID ${tId}: Not a quote tweet and no Pixiv source. Fallback to Unknown Artist.`,
-      );
-      originalPostId = await handleUnknownOriginalPost(prisma, transData);
-      await autoTagPost(prisma, originalPostId, transData.text || "");
-    }
-
-    // NẾU TÌM THẤY BÀI GỐC -> TIẾN HÀNH CÀO
-    if (originalTweetUrl) {
-      let origData: ExtendedTweetData | null = await scrapeTweetMetadata(
-        originalTweetUrl,
-        false,
-      );
-
-      if (!origData || !origData.photos?.length) {
-        console.log(
-          `   🔞 Scraping original tweet photos via browser (NSFW)...`,
-        );
-        origData = await scrapeNSFWWithBrowser(context, originalTweetUrl);
-      }
-
-      if (origData) {
-        const artistHandle = origData.handle.startsWith("@")
-          ? origData.handle
-          : `@${origData.handle}`;
-
-        const validArtistName =
-          origData.name &&
-          origData.name !== "Unknown" &&
-          origData.name !== "Unknown Artist"
-            ? origData.name.trim()
-            : undefined;
-
-        // 🌟 CHỐT CHẶN 3: Quét handle và display name thực tế cào được
-        if (
-          isArtistBlacklisted(artistHandle) ||
-          isArtistBlacklisted(validArtistName)
-        ) {
-          console.log(
-            `   ⛔ [Blacklist - Artist] ID ${tId}: Original creator [${validArtistName || ""} (${artistHandle})] is blacklisted. Skipping...`,
-          );
-          skippedCount++;
-          continue;
-        }
-
-        fallbackArtistName = validArtistName || artistHandle;
-
-        const artist = await prisma.creator.upsert({
-          where: { handle: artistHandle },
-          update: {
-            role: "ARTIST",
-            ...(validArtistName ? { name: validArtistName } : {}),
-          },
-          create: {
-            handle: artistHandle,
-            name: validArtistName || artistHandle,
-            profileUrl: `https://x.com/${artistHandle.replace("@", "")}`,
-            role: "ARTIST",
-          },
-        });
-
-        const originalPost = await prisma.originalPost.upsert({
-          where: { tweetId: origData.tweetId },
-          update: {
-            content: origData.text || "",
-            mediaUrls: origData.photos || [],
-            artistId: artist.id,
-          },
-          create: {
-            tweetId: origData.tweetId,
-            tweetUrl: origData.tweetUrl,
-            postedAt: parseValidDate(origData.postedAt, origData.tweetId),
-            content: origData.text || "",
-            mediaUrls: origData.photos || [],
-            artistId: artist.id,
-          },
-        });
-
-        originalPostId = originalPost.id;
-        const combinedText = `${transData.text || ""} ${origData.text || ""}`;
-        await autoTagPost(prisma, originalPost.id, combinedText);
-      } else {
-        // 🌟 CHỐT CHẶN 4: Có link nhưng cào lỗi -> kiểm tra lại link trước khi fallback sang Unknown
-        if (containsBlacklistedArtist(originalTweetUrl)) {
-          console.log(
-            `   ⛔ [Blacklist - Fallback] Original tweet link matched blacklist on failed scrape. Skipping...`,
-          );
-          skippedCount++;
-          continue;
-        }
-
-        originalPostId = await handleUnknownOriginalPost(prisma, transData);
-      }
-    } else {
-      // 🌟 KHÔNG PHẢI QUOTE / KHÔNG TÌM THẤY TWEET GỐC -> GÁN UNKNOWN
-      console.log(
-        `   ⚠️ [${idx + 1}/${tweetIdList.length}] ID ${tId}: Not a quote tweet. Fallback to Unknown Artist.`,
       );
       originalPostId = await handleUnknownOriginalPost(prisma, transData);
       await autoTagPost(prisma, originalPostId, transData.text || "");

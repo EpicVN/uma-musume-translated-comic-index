@@ -1870,5 +1870,13 @@
         "aliases": [
             "azuma"
         ]
+    },
+    {
+        "slug": "win-marilyn",
+        "name": "Win Marilyn",
+        "jp": "ウインマリリン",
+        "aliases": [
+            "marilyn"
+        ]
     }
 ]
