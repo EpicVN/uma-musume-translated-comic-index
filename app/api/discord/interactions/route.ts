@@ -355,12 +355,7 @@ export async function POST(req: NextRequest) {
       interaction.user?.username ||
       "A Moderator";
 
-    // Defer update message within 50ms to satisfy Discord's 3-second deadline
-    const immediateResponse = NextResponse.json({
-      type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE,
-    });
-
-    // Helper to resolve the correct OriginalPost ID from either post type
+    // Helper: Tìm ra chính xác ID của OriginalPost dù report.postId là bản gốc hay bản dịch
     const resolveOriginalPostId = async (postId: string) => {
       const direct = await prisma.originalPost.findFirst({
         where: { OR: [{ id: postId }, { tweetId: postId }] },
@@ -375,715 +370,454 @@ export async function POST(req: NextRequest) {
       return translated?.originalPostId || null;
     };
 
-
-      (async () => {
-        const webhookEditUrl = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
-        const webhookFollowupUrl = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}`;
-
-        try {
-          const report = await prisma.comicReport.findUnique({
-            where: { id: reportId },
-          });
-
-          if (!report) {
-            await fetch(webhookEditUrl, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                content: "⚠️ This report no longer exists in the database.",
-                embeds: [],
-                components: [],
-              }),
-            });
-            return;
-          }
-
-          // -----------------------------------------------------------------
-          // ACTION 1: APPROVE
-          // -----------------------------------------------------------------
-          if (action === "approve") {
-            const lock = await prisma.comicReport.updateMany({
-              where: {
-                id: reportId,
-                status: "PENDING",
-              },
-              data: {
-                status: "APPROVED",
-                handledBy: modUsername,
-              },
-            });
-
-            if (lock.count === 0) {
-              await fetch(webhookFollowupUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  content:
-                    "⚠️ This report is already being processed or has been completed by another moderator.",
-                  flags: 64,
-                }),
-              });
-              return;
-            }
-
-            const targetOriginalPostId = await resolveOriginalPostId(
-              report.postId,
-            );
-
-            if (!targetOriginalPostId) {
-              await prisma.comicReport.update({
-                where: { id: reportId },
-                data: { status: "PENDING", handledBy: null },
-              });
-
-              await fetch(webhookFollowupUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  content: `⚠️ Could not find any original post associated with ID: \`${report.postId}\``,
-                  flags: 64,
-                }),
-              });
-              return;
-            }
-
-            let appliedDetails = report.content;
-
-            // --- 1.1 HANDLE ORIGINAL_LINK (PIXIV & TWITTER) ---
-            if (report.type === "ORIGINAL_LINK") {
-              const pixivId = extractPixivId(report.content);
-              const tweetIdMatch = report.content.match(/status\/(\d+)/);
-
-              // CASE A: PIXIV SOURCE
-              if (pixivId) {
-                const pixivData = await scrapePixivMetadata(report.content);
-                if (!pixivData || pixivData.mediaUrls.length === 0) {
-                  throw new Error(
-                    "Pixiv illustration metadata not found or has no images.",
-                  );
-                }
-
-                const artistHandle = `@${pixivData.artistAccount}`;
-                const creator = await prisma.creator.upsert({
-                  where: { handle: artistHandle },
-                  update: {
-                    name: pixivData.artistName,
-                    profileUrl: pixivData.profileUrl,
-                  },
-                  create: {
-                    handle: artistHandle,
-                    name: pixivData.artistName,
-                    profileUrl: pixivData.profileUrl,
-                    role: "ARTIST",
-                  },
-                });
-
-                const pixivUniqueId = `pixiv-${pixivId}`;
-                const existingOriginalPost =
-                  await prisma.originalPost.findUnique({
-                    where: { tweetId: pixivUniqueId },
-                  });
-
-                let finalOriginalPostId = targetOriginalPostId;
-
-                if (existingOriginalPost) {
-                  finalOriginalPostId = existingOriginalPost.id;
-
-                  await prisma.translatedPost.updateMany({
-                    where: {
-                      OR: [
-                        { id: report.postId },
-                        { originalPostId: targetOriginalPostId },
-                      ],
-                    },
-                    data: { originalPostId: existingOriginalPost.id },
-                  });
-
-                  await prisma.originalPost.update({
-                    where: { id: existingOriginalPost.id },
-                    data: {
-                      mediaUrls: pixivData.mediaUrls,
-                      mediaCount: pixivData.mediaUrls.length,
-                      content: pixivData.title || undefined,
-                      postedAt: new Date(pixivData.postedAt),
-                      artistId: creator.id,
-                    },
-                  });
-
-                  if (targetOriginalPostId !== existingOriginalPost.id) {
-                    const remaining = await prisma.translatedPost.count({
-                      where: { originalPostId: targetOriginalPostId },
-                    });
-                    if (remaining === 0) {
-                      await prisma.postTag.deleteMany({
-                        where: { postId: targetOriginalPostId },
-                      });
-                      await prisma.originalPost
-                        .delete({ where: { id: targetOriginalPostId } })
-                        .catch(() => {});
-                    }
-                  }
-                } else {
-                  await prisma.originalPost.update({
-                    where: { id: targetOriginalPostId },
-                    data: {
-                      tweetId: pixivUniqueId,
-                      tweetUrl: `https://www.pixiv.net/artworks/${pixivId}`,
-                      content: pixivData.title || "",
-                      mediaUrls: pixivData.mediaUrls,
-                      mediaCount: pixivData.mediaUrls.length,
-                      postedAt: new Date(pixivData.postedAt),
-                      artist: { connect: { id: creator.id } },
-                    },
-                  });
-                }
-
-                revalidateComicUpdates({
-                  postId: report.postId,
-                  originalPostId: finalOriginalPostId,
-                  artistHandle: artistHandle,
-                });
-
-                appliedDetails = [
-                  `🎨 **Pixiv Source Linked:** [Pixiv #${pixivId}](https://www.pixiv.net/artworks/${pixivId})`,
-                  `Artist: **${pixivData.artistName}** (\`${artistHandle}\`)`,
-                  `Images: **${pixivData.mediaUrls.length}** page(s)`,
-                ].join(" • ");
-              }
-              // CASE B: TWITTER SOURCE
-              else if (tweetIdMatch) {
-                const tweetId = tweetIdMatch[1];
-                const tweetUrl = `https://x.com/i/status/${tweetId}`;
-                const scraped = await scrapeTweetData(tweetUrl);
-
-                let artistId: string | undefined = undefined;
-                let artistInfo = "";
-
-                if (scraped?.artistHandle) {
-                  const artistHandle = scraped.artistHandle;
-                  const artistName = scraped.artistName || artistHandle;
-                  const profileUrl = `https://x.com/${artistHandle}`;
-
-                  const creator = await prisma.creator.upsert({
-                    where: { handle: artistHandle },
-                    update: { name: artistName, profileUrl },
-                    create: {
-                      handle: artistHandle,
-                      name: artistName,
-                      profileUrl,
-                      role: "ARTIST",
-                    },
-                  });
-
-                  artistId = creator.id;
-                  artistInfo = `Artist: **${artistName}** (\`@${artistHandle}\`)`;
-                }
-
-                const existingOriginalPost =
-                  await prisma.originalPost.findUnique({
-                    where: { tweetId },
-                  });
-
-                let finalOriginalPostId = targetOriginalPostId;
-
-                if (existingOriginalPost) {
-                  finalOriginalPostId = existingOriginalPost.id;
-
-                  await prisma.translatedPost.updateMany({
-                    where: {
-                      OR: [
-                        { id: report.postId },
-                        { originalPostId: targetOriginalPostId },
-                      ],
-                    },
-                    data: {
-                      originalPostId: existingOriginalPost.id,
-                    },
-                  });
-
-                  if (scraped && scraped.mediaUrls.length > 0) {
-                    await prisma.originalPost.update({
-                      where: { id: existingOriginalPost.id },
-                      data: {
-                        mediaUrls: scraped.mediaUrls,
-                        mediaCount: scraped.mediaUrls.length,
-                        ...(scraped.text ? { content: scraped.text } : {}),
-                        ...(scraped.postedAt
-                          ? { postedAt: scraped.postedAt }
-                          : {}),
-                        ...(artistId ? { artistId } : {}),
-                      },
-                    });
-                  }
-
-                  if (targetOriginalPostId !== existingOriginalPost.id) {
-                    const remaining = await prisma.translatedPost.count({
-                      where: { originalPostId: targetOriginalPostId },
-                    });
-
-                    if (remaining === 0) {
-                      await prisma.postTag.deleteMany({
-                        where: { postId: targetOriginalPostId },
-                      });
-                      await prisma.originalPost
-                        .delete({ where: { id: targetOriginalPostId } })
-                        .catch(() => {});
-                    }
-                  }
-                } else {
-                  const updateData: Prisma.OriginalPostUpdateInput = {
-                    tweetId,
-                    tweetUrl,
-                    ...(artistId
-                      ? { artist: { connect: { id: artistId } } }
-                      : {}),
-                  };
-
-                  if (scraped && scraped.mediaUrls.length > 0) {
-                    updateData.mediaUrls = scraped.mediaUrls;
-                    updateData.mediaCount = scraped.mediaUrls.length;
-                    if (scraped.text) updateData.content = scraped.text;
-                    if (scraped.postedAt)
-                      updateData.postedAt = scraped.postedAt;
-                  }
-
-                  await prisma.originalPost.update({
-                    where: { id: targetOriginalPostId },
-                    data: updateData,
-                  });
-                }
-
-                revalidateComicUpdates({
-                  postId: report.postId,
-                  originalPostId: finalOriginalPostId,
-                  artistHandle: scraped?.artistHandle,
-                });
-
-                const imgCount = scraped?.mediaUrls.length || 0;
-                appliedDetails = [
-                  existingOriginalPost
-                    ? `🔗 Linked to Existing Original Post (\`${finalOriginalPostId}\`)`
-                    : `Updated Tweet URL: ${tweetUrl}`,
-                  artistInfo,
-                  imgCount > 0 ? `Fetched **${imgCount}** raw image(s)` : "",
-                ]
-                  .filter(Boolean)
-                  .join(" • ");
-              } else {
-                throw new Error(
-                  "Invalid link: Must be a Twitter/X or Pixiv artwork URL.",
-                );
-              }
-            }
-
-            // --- 1.2 HANDLE CHARACTER_TAG ---
-            else if (report.type === "CHARACTER_TAG") {
-              let tagData: {
-                action: string;
-                tags?: string[];
-                tag?: string;
-                oldTag?: string;
-                newTag?: string;
-              } = { action: "ADD" };
-
-              try {
-                tagData = JSON.parse(report.content);
-              } catch {
-                tagData = { action: "ADD", tag: report.content.trim() };
-              }
-
-              const targetTags: string[] = Array.isArray(tagData.tags)
-                ? tagData.tags.map((t) => t.trim()).filter(Boolean)
-                : tagData.tag
-                  ? tagData.tag
-                      .split(",")
-                      .map((t) => t.trim())
-                      .filter(Boolean)
-                  : [];
-
-              const affectedSlugs: string[] = [];
-
-              if (tagData.action === "ADD" && targetTags.length > 0) {
-                for (const tagName of targetTags) {
-                  const slug = slugify(tagName) || `tag-${Date.now()}`;
-                  affectedSlugs.push(slug);
-
-                  const tag = await prisma.tag.upsert({
-                    where: { name: tagName },
-                    update: {},
-                    create: {
-                      name: tagName,
-                      slug,
-                      category: "CHARACTER",
-                    },
-                  });
-
-                  await prisma.postTag.upsert({
-                    where: {
-                      postId_tagId: {
-                        postId: targetOriginalPostId,
-                        tagId: tag.id,
-                      },
-                    },
-                    update: { isManual: true },
-                    create: {
-                      postId: targetOriginalPostId,
-                      tagId: tag.id,
-                      isManual: true,
-                    },
-                  });
-                }
-
-                appliedDetails = `➕ Added Tag(s): ${targetTags
-                  .map((t) => `**${t}**`)
-                  .join(", ")}`;
-              } else if (tagData.action === "REMOVE" && targetTags.length > 0) {
-                for (const tagName of targetTags) {
-                  const slug = slugify(tagName);
-                  if (slug) affectedSlugs.push(slug);
-
-                  const tag = await prisma.tag.findUnique({
-                    where: { name: tagName },
-                  });
-
-                  if (tag) {
-                    await prisma.postTag.deleteMany({
-                      where: {
-                        postId: targetOriginalPostId,
-                        tagId: tag.id,
-                      },
-                    });
-                  }
-                }
-
-                appliedDetails = `❌ Removed Tag(s): ${targetTags
-                  .map((t) => `**${t}**`)
-                  .join(", ")}`;
-              } else if (
-                tagData.action === "REPLACE" &&
-                tagData.oldTag &&
-                tagData.newTag
-              ) {
-                if (tagData.oldTag) affectedSlugs.push(slugify(tagData.oldTag));
-                if (tagData.newTag) affectedSlugs.push(slugify(tagData.newTag));
-
-                const oldTag = await prisma.tag.findUnique({
-                  where: { name: tagData.oldTag },
-                });
-
-                if (oldTag) {
-                  await prisma.postTag.deleteMany({
-                    where: {
-                      postId: targetOriginalPostId,
-                      tagId: oldTag.id,
-                    },
-                  });
-                }
-
-                const newSlug = slugify(tagData.newTag) || `tag-${Date.now()}`;
-                const newTag = await prisma.tag.upsert({
-                  where: { name: tagData.newTag },
-                  update: {},
-                  create: {
-                    name: tagData.newTag,
-                    slug: newSlug,
-                    category: "CHARACTER",
-                  },
-                });
-
-                await prisma.postTag.upsert({
-                  where: {
-                    postId_tagId: {
-                      postId: targetOriginalPostId,
-                      tagId: newTag.id,
-                    },
-                  },
-                  update: { isManual: true },
-                  create: {
-                    postId: targetOriginalPostId,
-                    tagId: newTag.id,
-                    isManual: true,
-                  },
-                });
-
-                appliedDetails = `🔄 Replaced: **${tagData.oldTag}** ➔ **${tagData.newTag}**`;
-              }
-
-              revalidateComicUpdates({
-                postId: report.postId,
-                originalPostId: targetOriginalPostId,
-                characterSlugs: affectedSlugs,
-              });
-            }
-
-            // --- 1.3 HANDLE BROKEN_MEDIA ---
-            else if (report.type === "BROKEN_MEDIA") {
-              let mediaData: {
-                target?: "ORIGINAL" | "TRANSLATED";
-                tweetUrl?: string;
-                note?: string;
-              } = {};
-
-              try {
-                mediaData = JSON.parse(report.content);
-              } catch {
-                mediaData = {
-                  target: "TRANSLATED",
-                  tweetUrl: report.content.trim(),
-                };
-              }
-
-              if (!mediaData.tweetUrl) {
-                throw new Error("Missing source URL to scrape images.");
-              }
-
-              let mediaUrls: string[] = [];
-              let textContent: string | undefined = undefined;
-
-              const pixivId = extractPixivId(mediaData.tweetUrl);
-
-              if (pixivId) {
-                const pixivScraped = await scrapePixivMetadata(
-                  mediaData.tweetUrl,
-                );
-                if (!pixivScraped || pixivScraped.mediaUrls.length === 0) {
-                  throw new Error(
-                    "No images found in the provided Pixiv artwork.",
-                  );
-                }
-                mediaUrls = pixivScraped.mediaUrls;
-                textContent = pixivScraped.title;
-              } else {
-                const scraped = await scrapeTweetData(mediaData.tweetUrl);
-                if (!scraped || scraped.mediaUrls.length === 0) {
-                  throw new Error(
-                    "No images found in the provided Twitter post.",
-                  );
-                }
-                mediaUrls = scraped.mediaUrls;
-                textContent = scraped.text;
-              }
-
-              const isOriginal = mediaData.target === "ORIGINAL";
-
-              if (isOriginal) {
-                await prisma.originalPost.update({
-                  where: { id: targetOriginalPostId },
-                  data: {
-                    mediaUrls,
-                    mediaCount: mediaUrls.length,
-                    ...(textContent ? { content: textContent } : {}),
-                  },
-                });
-
-                appliedDetails = `🖼️ **Restored Raw Images:** Replaced with **${mediaUrls.length}** image(s) from [Source](${mediaData.tweetUrl})`;
-              } else {
-                const translatedPost = await prisma.translatedPost.findFirst({
-                  where: {
-                    OR: [
-                      { id: report.postId },
-                      { originalPostId: targetOriginalPostId },
-                    ],
-                  },
-                });
-
-                if (!translatedPost) {
-                  throw new Error("Translated comic record not found.");
-                }
-
-                await prisma.translatedPost.update({
-                  where: { id: translatedPost.id },
-                  data: {
-                    mediaUrls,
-                  },
-                });
-
-                appliedDetails = `🌐 **Restored Translated Images:** Replaced with **${mediaUrls.length}** image(s) from [Source](${mediaData.tweetUrl})`;
-              }
-
-              revalidateComicUpdates({
-                postId: report.postId,
-                originalPostId: targetOriginalPostId,
-              });
-            }
-
-            // 🌟 1.4 HANDLE IRRELEVANT_CONTENT (XÓA TOÀN BỘ BÀI ĐĂNG)
-            else if (report.type === "IRRELEVANT_CONTENT") {
-              // 1. Xóa toàn bộ tag nhân vật liên kết với bài gốc
-              await prisma.postTag.deleteMany({
-                where: { postId: targetOriginalPostId },
-              });
-
-              // 2. Xóa toàn bộ các bản dịch liên quan đến bài gốc này
-              await prisma.translatedPost.deleteMany({
-                where: { originalPostId: targetOriginalPostId },
-              });
-
-              // 3. Xóa bài gốc
-              await prisma.originalPost.delete({
-                where: { id: targetOriginalPostId },
-              }).catch(() => {});
-
-              // 4. Xóa cache Next.js để truyện bay màu khỏi trang chủ ngay lập tức
-              revalidateComicUpdates({
-                postId: report.postId,
-                originalPostId: targetOriginalPostId,
-              });
-
-              appliedDetails = `🗑️ **Content Deleted:** The post and all its translations/tags have been permanently removed from the database.`;
-            }
-
-            // Send PATCH update to Discord embed on success and dismiss action buttons
-            await fetch(webhookEditUrl, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                embeds: [
-                  {
-                    title: `✅ Report #${report.id} APPROVED`,
-                    color: 0x22c55e,
-                    fields: [
-                      {
-                        name: "Original Post ID",
-                        value: `\`${targetOriginalPostId}\``,
-                        inline: true,
-                      },
-                      {
-                        name: "Type",
-                        value: `\`${report.type}\``,
-                        inline: true,
-                      },
-                      {
-                        name: "Approved By",
-                        value: `**${modUsername}**`,
-                        inline: true,
-                      },
-                      { name: "Applied Action", value: appliedDetails },
-                    ],
-                    footer: {
-                      text: "Umazing Index • Status Updated",
-                    },
-                    timestamp: new Date().toISOString(),
-                  },
-                ],
-                components: [],
-              }),
-            });
-          }
-
-          // -----------------------------------------------------------------
-          // ACTION 2: REJECT
-          // -----------------------------------------------------------------
-          else if (action === "reject") {
-            const lock = await prisma.comicReport.updateMany({
-              where: {
-                id: reportId,
-                status: "PENDING",
-              },
-              data: {
-                status: "REJECTED",
-                handledBy: modUsername,
-              },
-            });
-
-            if (lock.count === 0) {
-              await fetch(webhookFollowupUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  content: "⚠️ This report has already been processed.",
-                  flags: 64,
-                }),
-              });
-              return;
-            }
-
-            await fetch(webhookEditUrl, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                embeds: [
-                  {
-                    title: `❌ Report #${report.id} REJECTED`,
-                    color: 0xef4444,
-                    fields: [
-                      {
-                        name: "Report ID",
-                        value: `\`${report.id}\``,
-                        inline: true,
-                      },
-                      {
-                        name: "Type",
-                        value: `\`${report.type}\``,
-                        inline: true,
-                      },
-                      {
-                        name: "Rejected By",
-                        value: `**${modUsername}**`,
-                        inline: true,
-                      },
-                      {
-                        name: "Submitted Content",
-                        value: report.content || "*(Empty)*",
-                      },
-                    ],
-                    footer: { text: "Umazing Index • Dismissed" },
-                    timestamp: new Date().toISOString(),
-                  },
-                ],
-                components: [],
-              }),
-            });
-          }
-        } catch (err) {
-          console.error("Background task error:", err);
-
-          await prisma.comicReport
-            .update({
-              where: { id: reportId },
-              data: {
-                status: "PENDING",
-                handledBy: null,
-              },
-            })
-            .catch(() => {});
-
-          const { reason, suggestion } = formatFriendlyError(err);
-
-          await fetch(webhookEditUrl, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              embeds: [
-                {
-                  title: `⚠️ Action Failed: Report #${reportId}`,
-                  color: 0xf59e0b,
-                  fields: [
-                    { name: "📌 Reason", value: reason, inline: false },
-                    {
-                      name: "💡 Suggestion",
-                      value: suggestion,
-                      inline: false,
-                    },
-                    {
-                      name: "Attempted By",
-                      value: `**${modUsername}**`,
-                      inline: true,
-                    },
-                  ],
-                  footer: {
-                    text: "Umazing Index • Action aborted, report restored to PENDING",
-                  },
-                  timestamp: new Date().toISOString(),
-                },
-              ],
-              components: [],
-            }),
+    try {
+      const report = await prisma.comicReport.findUnique({
+        where: { id: reportId },
+      });
+
+      if (!report) {
+        return NextResponse.json({
+          type: InteractionResponseType.UPDATE_MESSAGE,
+          data: {
+            content: "⚠️ This report no longer exists in the database.",
+            embeds: [],
+            components: [],
+          },
+        });
+      }
+
+      // -----------------------------------------------------------------
+      // ACTION 1: APPROVE
+      // -----------------------------------------------------------------
+      if (action === "approve") {
+        const lock = await prisma.comicReport.updateMany({
+          where: {
+            id: reportId,
+            status: "PENDING",
+          },
+          data: {
+            status: "APPROVED",
+            handledBy: modUsername,
+          },
+        });
+
+        if (lock.count === 0) {
+          return NextResponse.json({
+            type: InteractionResponseType.UPDATE_MESSAGE,
+            data: {
+              content: "⚠️ This report is already being processed or has been completed.",
+              flags: 64,
+            },
           });
         }
-      })();
 
-    return immediateResponse;
+        // Lấy đúng ID gốc ĐỂ THÊM TAG VÀ SỬA LINK
+        const targetOriginalPostId = await resolveOriginalPostId(report.postId);
+
+        if (!targetOriginalPostId) {
+          await prisma.comicReport.update({
+            where: { id: reportId },
+            data: { status: "PENDING", handledBy: null },
+          });
+
+          return NextResponse.json({
+            type: InteractionResponseType.UPDATE_MESSAGE,
+            data: {
+              content: `⚠️ Could not find any original post associated with ID: \`${report.postId}\``,
+              flags: 64,
+            },
+          });
+        }
+
+        let appliedDetails = report.content;
+
+        // --- 1.1 HANDLE ORIGINAL_LINK (PIXIV & TWITTER) ---
+        if (report.type === "ORIGINAL_LINK") {
+          const pixivId = extractPixivId(report.content);
+          const tweetIdMatch = report.content.match(/status\/(\d+)/);
+
+          if (pixivId) {
+            const pixivData = await scrapePixivMetadata(report.content);
+            if (!pixivData || pixivData.mediaUrls.length === 0) {
+              throw new Error("Pixiv illustration metadata not found or has no images.");
+            }
+
+            const artistHandle = `@${pixivData.artistAccount}`;
+            const creator = await prisma.creator.upsert({
+              where: { handle: artistHandle },
+              update: { name: pixivData.artistName, profileUrl: pixivData.profileUrl },
+              create: { handle: artistHandle, name: pixivData.artistName, profileUrl: pixivData.profileUrl, role: "ARTIST" },
+            });
+
+            const pixivUniqueId = `pixiv-${pixivId}`;
+            const existingOriginalPost = await prisma.originalPost.findUnique({ where: { tweetId: pixivUniqueId } });
+
+            let finalOriginalPostId = targetOriginalPostId;
+
+            if (existingOriginalPost) {
+              finalOriginalPostId = existingOriginalPost.id;
+
+              await prisma.translatedPost.updateMany({
+                where: { OR: [{ id: report.postId }, { originalPostId: targetOriginalPostId }] },
+                data: { originalPostId: existingOriginalPost.id },
+              });
+
+              await prisma.originalPost.update({
+                where: { id: existingOriginalPost.id },
+                data: {
+                  mediaUrls: pixivData.mediaUrls,
+                  mediaCount: pixivData.mediaUrls.length,
+                  content: pixivData.title || undefined,
+                  postedAt: new Date(pixivData.postedAt),
+                  artistId: creator.id,
+                },
+              });
+
+              if (targetOriginalPostId !== existingOriginalPost.id) {
+                const remaining = await prisma.translatedPost.count({ where: { originalPostId: targetOriginalPostId } });
+                if (remaining === 0) {
+                  await prisma.postTag.deleteMany({ where: { postId: targetOriginalPostId } });
+                  await prisma.originalPost.delete({ where: { id: targetOriginalPostId } }).catch(() => {});
+                }
+              }
+            } else {
+              await prisma.originalPost.update({
+                where: { id: targetOriginalPostId },
+                data: {
+                  tweetId: pixivUniqueId,
+                  tweetUrl: `https://www.pixiv.net/artworks/${pixivId}`,
+                  content: pixivData.title || "",
+                  mediaUrls: pixivData.mediaUrls,
+                  mediaCount: pixivData.mediaUrls.length,
+                  postedAt: new Date(pixivData.postedAt),
+                  artist: { connect: { id: creator.id } },
+                },
+              });
+            }
+
+            // revalidateComicUpdates({ postId: report.postId, originalPostId: finalOriginalPostId, artistHandle: artistHandle });
+            appliedDetails = [
+              `🎨 **Pixiv Source Linked:** [Pixiv #${pixivId}](https://www.pixiv.net/artworks/${pixivId})`,
+              `Artist: **${pixivData.artistName}** (\`${artistHandle}\`)`,
+              `Images: **${pixivData.mediaUrls.length}** page(s)`,
+            ].join(" • ");
+            
+          } else if (tweetIdMatch) {
+            const tweetId = tweetIdMatch[1];
+            const tweetUrl = `https://x.com/i/status/${tweetId}`;
+            const scraped = await scrapeTweetData(tweetUrl);
+
+            let artistId: string | undefined = undefined;
+            let artistInfo = "";
+
+            if (scraped?.artistHandle) {
+              const artistHandle = scraped.artistHandle;
+              const artistName = scraped.artistName || artistHandle;
+              const profileUrl = `https://x.com/${artistHandle}`;
+
+              const creator = await prisma.creator.upsert({
+                where: { handle: artistHandle },
+                update: { name: artistName, profileUrl },
+                create: { handle: artistHandle, name: artistName, profileUrl, role: "ARTIST" },
+              });
+              artistId = creator.id;
+              artistInfo = `Artist: **${artistName}** (\`@${artistHandle}\`)`;
+            }
+
+            const existingOriginalPost = await prisma.originalPost.findUnique({ where: { tweetId } });
+            let finalOriginalPostId = targetOriginalPostId;
+
+            if (existingOriginalPost) {
+              finalOriginalPostId = existingOriginalPost.id;
+              await prisma.translatedPost.updateMany({
+                where: { OR: [{ id: report.postId }, { originalPostId: targetOriginalPostId }] },
+                data: { originalPostId: existingOriginalPost.id },
+              });
+
+              if (scraped && scraped.mediaUrls.length > 0) {
+                await prisma.originalPost.update({
+                  where: { id: existingOriginalPost.id },
+                  data: {
+                    mediaUrls: scraped.mediaUrls,
+                    mediaCount: scraped.mediaUrls.length,
+                    ...(scraped.text ? { content: scraped.text } : {}),
+                    ...(scraped.postedAt ? { postedAt: scraped.postedAt } : {}),
+                    ...(artistId ? { artistId } : {}),
+                  },
+                });
+              }
+
+              if (targetOriginalPostId !== existingOriginalPost.id) {
+                const remaining = await prisma.translatedPost.count({ where: { originalPostId: targetOriginalPostId } });
+                if (remaining === 0) {
+                  await prisma.postTag.deleteMany({ where: { postId: targetOriginalPostId } });
+                  await prisma.originalPost.delete({ where: { id: targetOriginalPostId } }).catch(() => {});
+                }
+              }
+            } else {
+              const updateData: Prisma.OriginalPostUpdateInput = {
+                tweetId,
+                tweetUrl,
+                ...(artistId ? { artist: { connect: { id: artistId } } } : {}),
+              };
+
+              if (scraped && scraped.mediaUrls.length > 0) {
+                updateData.mediaUrls = scraped.mediaUrls;
+                updateData.mediaCount = scraped.mediaUrls.length;
+                if (scraped.text) updateData.content = scraped.text;
+                if (scraped.postedAt) updateData.postedAt = scraped.postedAt;
+              }
+
+              await prisma.originalPost.update({
+                where: { id: targetOriginalPostId },
+                data: updateData,
+              });
+            }
+
+            // revalidateComicUpdates({ postId: report.postId, originalPostId: finalOriginalPostId, artistHandle: scraped?.artistHandle });
+            const imgCount = scraped?.mediaUrls.length || 0;
+            appliedDetails = [
+              existingOriginalPost ? `🔗 Linked to Existing Original Post (\`${finalOriginalPostId}\`)` : `Updated Tweet URL: ${tweetUrl}`,
+              artistInfo,
+              imgCount > 0 ? `Fetched **${imgCount}** raw image(s)` : "",
+            ].filter(Boolean).join(" • ");
+            
+          } else {
+            throw new Error("Invalid link: Must be a Twitter/X or Pixiv artwork URL.");
+          }
+        }
+
+        // --- 1.2 HANDLE CHARACTER_TAG ---
+        else if (report.type === "CHARACTER_TAG") {
+          let tagData: { action: string; tags?: string[]; tag?: string; oldTag?: string; newTag?: string; } = { action: "ADD" };
+
+          try {
+            tagData = JSON.parse(report.content);
+          } catch {
+            tagData = { action: "ADD", tag: report.content.trim() };
+          }
+
+          const targetTags: string[] = Array.isArray(tagData.tags)
+            ? tagData.tags.map((t) => t.trim()).filter(Boolean)
+            : tagData.tag ? tagData.tag.split(",").map((t) => t.trim()).filter(Boolean) : [];
+
+          const affectedSlugs: string[] = [];
+
+          if (tagData.action === "ADD" && targetTags.length > 0) {
+            for (const tagName of targetTags) {
+              const slug = slugify(tagName) || `tag-${Date.now()}`;
+              affectedSlugs.push(slug);
+
+              const tag = await prisma.tag.upsert({
+                where: { name: tagName },
+                update: {},
+                create: { name: tagName, slug, category: "CHARACTER" },
+              });
+
+              await prisma.postTag.upsert({
+                where: {
+                  postId_tagId: { postId: targetOriginalPostId, tagId: tag.id },
+                },
+                update: { isManual: true },
+                create: { postId: targetOriginalPostId, tagId: tag.id, isManual: true },
+              });
+            }
+            appliedDetails = `➕ Added Tag(s): ${targetTags.map((t) => `**${t}**`).join(", ")}`;
+            
+          } else if (tagData.action === "REMOVE" && targetTags.length > 0) {
+            for (const tagName of targetTags) {
+              const slug = slugify(tagName);
+              if (slug) affectedSlugs.push(slug);
+
+              const tag = await prisma.tag.findUnique({ where: { name: tagName } });
+
+              if (tag) {
+                await prisma.postTag.deleteMany({
+                  where: { postId: targetOriginalPostId, tagId: tag.id },
+                });
+              }
+            }
+            appliedDetails = `❌ Removed Tag(s): ${targetTags.map((t) => `**${t}**`).join(", ")}`;
+            
+          } else if (tagData.action === "REPLACE" && tagData.oldTag && tagData.newTag) {
+            if (tagData.oldTag) affectedSlugs.push(slugify(tagData.oldTag));
+            if (tagData.newTag) affectedSlugs.push(slugify(tagData.newTag));
+
+            const oldTag = await prisma.tag.findUnique({ where: { name: tagData.oldTag } });
+
+            if (oldTag) {
+              await prisma.postTag.deleteMany({
+                where: { postId: targetOriginalPostId, tagId: oldTag.id },
+              });
+            }
+
+            const newSlug = slugify(tagData.newTag) || `tag-${Date.now()}`;
+            const newTag = await prisma.tag.upsert({
+              where: { name: tagData.newTag },
+              update: {},
+              create: { name: tagData.newTag, slug: newSlug, category: "CHARACTER" },
+            });
+
+            await prisma.postTag.upsert({
+              where: {
+                postId_tagId: { postId: targetOriginalPostId, tagId: newTag.id },
+              },
+              update: { isManual: true },
+              create: { postId: targetOriginalPostId, tagId: newTag.id, isManual: true },
+            });
+            appliedDetails = `🔄 Replaced: **${tagData.oldTag}** ➔ **${tagData.newTag}**`;
+          }
+          // revalidateComicUpdates({ postId: report.postId, originalPostId: targetOriginalPostId, characterSlugs: affectedSlugs });
+        }
+
+        // --- 1.3 HANDLE BROKEN_MEDIA ---
+        else if (report.type === "BROKEN_MEDIA") {
+          let mediaData: { target?: "ORIGINAL" | "TRANSLATED"; tweetUrl?: string; note?: string; } = {};
+
+          try {
+            mediaData = JSON.parse(report.content);
+          } catch {
+            mediaData = { target: "TRANSLATED", tweetUrl: report.content.trim() };
+          }
+
+          if (!mediaData.tweetUrl) throw new Error("Missing source URL to scrape images.");
+
+          let mediaUrls: string[] = [];
+          let textContent: string | undefined = undefined;
+          const pixivId = extractPixivId(mediaData.tweetUrl);
+
+          if (pixivId) {
+            const pixivScraped = await scrapePixivMetadata(mediaData.tweetUrl);
+            if (!pixivScraped || pixivScraped.mediaUrls.length === 0) throw new Error("No images found in the provided Pixiv artwork.");
+            mediaUrls = pixivScraped.mediaUrls;
+            textContent = pixivScraped.title;
+          } else {
+            const scraped = await scrapeTweetData(mediaData.tweetUrl);
+            if (!scraped || scraped.mediaUrls.length === 0) throw new Error("No images found in the provided Twitter post.");
+            mediaUrls = scraped.mediaUrls;
+            textContent = scraped.text;
+          }
+
+          if (mediaData.target === "ORIGINAL") {
+            await prisma.originalPost.update({
+              where: { id: targetOriginalPostId },
+              data: { mediaUrls, mediaCount: mediaUrls.length, ...(textContent ? { content: textContent } : {}) },
+            });
+            appliedDetails = `🖼️ **Restored Raw Images:** Replaced with **${mediaUrls.length}** image(s) from [Source](${mediaData.tweetUrl})`;
+          } else {
+            const translatedPost = await prisma.translatedPost.findFirst({
+              where: { OR: [{ id: report.postId }, { originalPostId: targetOriginalPostId }] },
+            });
+            if (!translatedPost) throw new Error("Translated comic record not found.");
+
+            await prisma.translatedPost.update({
+              where: { id: translatedPost.id },
+              data: { mediaUrls },
+            });
+            appliedDetails = `🌐 **Restored Translated Images:** Replaced with **${mediaUrls.length}** image(s) from [Source](${mediaData.tweetUrl})`;
+          }
+          // revalidateComicUpdates({ postId: report.postId, originalPostId: targetOriginalPostId });
+        }
+
+        // --- 1.4 HANDLE IRRELEVANT_CONTENT ---
+        else if (report.type === "IRRELEVANT_CONTENT") {
+          await prisma.postTag.deleteMany({ where: { postId: targetOriginalPostId } });
+          await prisma.translatedPost.deleteMany({ where: { originalPostId: targetOriginalPostId } });
+          await prisma.originalPost.delete({ where: { id: targetOriginalPostId } }).catch(() => {});
+          // revalidateComicUpdates({ postId: report.postId, originalPostId: targetOriginalPostId });
+          appliedDetails = `🗑️ **Content Deleted:** The post and all its translations/tags have been permanently removed.`;
+        }
+
+        // UPDATE MESSAGE THÀNH CÔNG GỬI LÊN DISCORD (Không dùng fetch patch nữa)
+        return NextResponse.json({
+          type: InteractionResponseType.UPDATE_MESSAGE,
+          data: {
+            embeds: [
+              {
+                title: `✅ Report #${report.id} APPROVED`,
+                color: 0x22c55e,
+                fields: [
+                  { name: "Original Post ID", value: `\`${targetOriginalPostId}\``, inline: true },
+                  { name: "Type", value: `\`${report.type}\``, inline: true },
+                  { name: "Approved By", value: `**${modUsername}**`, inline: true },
+                  { name: "Applied Action", value: appliedDetails },
+                ],
+                footer: { text: "Umazing Index • Status Updated" },
+                timestamp: new Date().toISOString(),
+              },
+            ],
+            components: [],
+          },
+        });
+      }
+
+      // -----------------------------------------------------------------
+      // ACTION 2: REJECT
+      // -----------------------------------------------------------------
+      else if (action === "reject") {
+        const lock = await prisma.comicReport.updateMany({
+          where: { id: reportId, status: "PENDING" },
+          data: { status: "REJECTED", handledBy: modUsername },
+        });
+
+        if (lock.count === 0) {
+          return NextResponse.json({
+            type: InteractionResponseType.UPDATE_MESSAGE,
+            data: { content: "⚠️ This report has already been processed.", flags: 64 },
+          });
+        }
+
+        return NextResponse.json({
+          type: InteractionResponseType.UPDATE_MESSAGE,
+          data: {
+            embeds: [
+              {
+                title: `❌ Report #${report.id} REJECTED`,
+                color: 0xef4444,
+                fields: [
+                  { name: "Report ID", value: `\`${report.id}\``, inline: true },
+                  { name: "Type", value: `\`${report.type}\``, inline: true },
+                  { name: "Rejected By", value: `**${modUsername}**`, inline: true },
+                  { name: "Submitted Content", value: report.content || "*(Empty)*" },
+                ],
+                footer: { text: "Umazing Index • Dismissed" },
+                timestamp: new Date().toISOString(),
+              },
+            ],
+            components: [],
+          },
+        });
+      }
+    } catch (err) {
+      console.error("Action error:", err);
+
+      await prisma.comicReport.update({
+        where: { id: reportId },
+        data: { status: "PENDING", handledBy: null },
+      }).catch(() => {});
+
+      const { reason, suggestion } = formatFriendlyError(err);
+
+      return NextResponse.json({
+        type: InteractionResponseType.UPDATE_MESSAGE,
+        data: {
+          embeds: [
+            {
+              title: `⚠️ Action Failed: Report #${reportId}`,
+              color: 0xf59e0b,
+              fields: [
+                { name: "📌 Reason", value: reason, inline: false },
+                { name: "💡 Suggestion", value: suggestion, inline: false },
+                { name: "Attempted By", value: `**${modUsername}**`, inline: true },
+              ],
+              footer: { text: "Umazing Index • Action aborted, report restored to PENDING" },
+              timestamp: new Date().toISOString(),
+            },
+          ],
+          components: [],
+        },
+      });
+    }
   }
 
   return NextResponse.json({ error: "Unhandled interaction" }, { status: 400 });

@@ -20,16 +20,16 @@ export async function POST(req: NextRequest) {
       honeypot,
     } = body;
 
-    // 1. Chống Spam Bot bằng trường ẩn Honeypot[cite: 6]
+    // 1. Chống Spam Bot bằng trường ẩn Honeypot
     if (honeypot) {
-      return NextResponse.json({ message: "Report submitted successfully." }); //[cite: 6]
+      return NextResponse.json({ message: "Report submitted successfully." });
     }
 
     if (!postId || !type || !content) {
       return NextResponse.json(
         { error: "Missing required fields." },
         { status: 400 },
-      ); //[cite: 6]
+      );
     }
 
     const allowedTypes = [
@@ -43,34 +43,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Invalid report type." },
         { status: 400 },
-      ); //[cite: 6]
+      );
     }
 
-    // Lấy địa chỉ IP người gửi[cite: 6]
+    // Lấy địa chỉ IP người gửi
     const ipAddress =
       req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
       req.headers.get("x-real-ip") ||
-      "127.0.0.1"; //[cite: 6]
+      "127.0.0.1";
 
-    // 2. Kiểm tra Rate Limit[cite: 6]
+    // 2. Kiểm tra Rate Limit
     if (process.env.DISABLE_RATE_LIMIT !== "true") {
-      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000); //[cite: 6]
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
       const reportCount = await prisma.comicReport.count({
         where: {
           ipAddress,
           createdAt: { gte: tenMinutesAgo },
         },
-      }); //[cite: 6]
+      });
 
       if (reportCount >= 10) {
         return NextResponse.json(
           { error: "You can only submit up to 10 reports every 10 minutes." },
           { status: 429 },
-        ); //[cite: 6]
+        );
       }
     }
 
-    // 3. Lưu báo cáo vào Cơ sở dữ liệu[cite: 6]
+    // 3. Lưu báo cáo vào Cơ sở dữ liệu
     const report = await prisma.comicReport.create({
       data: {
         postId,
@@ -79,9 +79,9 @@ export async function POST(req: NextRequest) {
         ipAddress,
         status: "PENDING",
       },
-    }); //[cite: 6]
+    });
 
-    // 4. Truy vấn tìm bài viết để lấy link xem trên web[cite: 6]
+    // 4. Truy vấn tìm bài viết để lấy link xem trên web
     const targetPost = await prisma.translatedPost.findFirst({
       where: {
         OR: [
@@ -110,34 +110,34 @@ export async function POST(req: NextRequest) {
           },
         },
       },
-    }); //[cite: 6]
+    });
 
     const origId =
       bodyOrigId ||
       targetPost?.originalPost?.id ||
       targetPost?.originalPost?.tweetId ||
-      targetPost?.originalPostId; //[cite: 6]
+      targetPost?.originalPostId;
 
-    const transId = bodyTransId || targetPost?.tweetId || targetPost?.id; //[cite: 6]
+    const transId = bodyTransId || targetPost?.tweetId || targetPost?.id;
 
     const comicLink =
       origId && transId
         ? `${baseUrl}/post/${origId}?tl=${transId}`
         : origId
           ? `${baseUrl}/post/${origId}`
-          : `${baseUrl}/post/${postId}`; //[cite: 6]
+          : `${baseUrl}/post/${postId}`;
 
     // Thumbnail ảnh đại diện của bài viết nếu có
     const previewThumbnail =
       targetPost?.mediaUrls?.[0] || targetPost?.originalPost?.mediaUrls?.[0];
 
     // 🌟 5. Định dạng nội dung hiển thị phân biệt X / Twitter và Pixiv
-    let displayType = report.type.replace("_", " "); //[cite: 6]
-    let formattedChange = report.content; //[cite: 6]
+    let displayType = report.type.replace("_", " ");
+    let formattedChange = report.content;
 
     if (report.type === "CHARACTER_TAG") {
       try {
-        const parsed = JSON.parse(report.content); //[cite: 6]
+        const parsed = JSON.parse(report.content);
         const tagsList: string[] = Array.isArray(parsed.tags)
           ? parsed.tags
           : parsed.tag
@@ -145,24 +145,53 @@ export async function POST(req: NextRequest) {
                 .split(",")
                 .map((s: string) => s.trim())
                 .filter(Boolean)
-            : []; //[cite: 6]
+            : [];
 
-        const tagsFormatted = tagsList
-          .map((t: string) => `\`${t}\``)
-          .join(", "); //[cite: 6]
+        // 🌟 XỬ LÝ LÀM ĐẸP CHO HÀNH ĐỘNG "UPDATE"
+        if (parsed.action === "UPDATE") {
+          displayType = `Update Character Tags`;
+          const added: string[] = [];
+          const removed: string[] = [];
 
-        if (parsed.action === "ADD") {
-          displayType = `Add Missing Tag(s) [${tagsList.length}]`; //[cite: 6]
-          formattedChange = `➕ **Add Character(s):** ${tagsFormatted}`; //[cite: 6]
+          for (let t of tagsList) {
+            // Fix lỗi Frontend gửi chuỗi lặp REMOVE::REMOVE::
+            t = t.replace(/^(REMOVE::)+/, "REMOVE::");
+
+            if (t.startsWith("REMOVE::")) {
+              removed.push(t.replace("REMOVE::", "").trim());
+            } else {
+              added.push(t.trim());
+            }
+          }
+
+          const details = [];
+          if (added.length > 0) {
+            details.push(
+              `➕ **Add:** ${added.map((t) => `\`${t}\``).join(", ")}`,
+            );
+          }
+          if (removed.length > 0) {
+            details.push(
+              `❌ **Remove:** ${removed.map((t) => `\`${t}\``).join(", ")}`,
+            );
+          }
+
+          formattedChange =
+            details.length > 0 ? details.join("\n") : "*(No changes)*";
+        }
+        // Các logic cũ (Dự phòng)
+        else if (parsed.action === "ADD") {
+          displayType = `Add Missing Tag(s) [${tagsList.length}]`;
+          formattedChange = `➕ **Add Character(s):** ${tagsList.map((t) => `\`${t}\``).join(", ")}`;
         } else if (parsed.action === "REMOVE") {
-          displayType = `Remove Redundant Tag(s) [${tagsList.length}]`; //[cite: 6]
-          formattedChange = `❌ **Remove Character(s):** ${tagsFormatted}`; //[cite: 6]
+          displayType = `Remove Redundant Tag(s) [${tagsList.length}]`;
+          formattedChange = `❌ **Remove Character(s):** ${tagsList.map((t) => `\`${t}\``).join(", ")}`;
         } else if (parsed.action === "REPLACE") {
-          displayType = "Replace Incorrect Tag"; //[cite: 6]
-          formattedChange = `🔄 **Replace:** \`${parsed.oldTag}\` ➔ \`${parsed.newTag}\``; //[cite: 6]
+          displayType = "Replace Incorrect Tag";
+          formattedChange = `🔄 **Replace:** \`${parsed.oldTag}\` ➔ \`${parsed.newTag}\``;
         }
       } catch {
-        formattedChange = report.content; //[cite: 6]
+        formattedChange = report.content;
       }
     } else if (report.type === "ORIGINAL_LINK") {
       const rawUrl = report.content.trim();
@@ -187,13 +216,13 @@ export async function POST(req: NextRequest) {
         }`;
       }
     } else if (report.type === "BROKEN_MEDIA") {
-      displayType = "Broken Image Fix"; //[cite: 6]
+      displayType = "Broken Image Fix";
       try {
-        const parsed = JSON.parse(report.content); //[cite: 6]
+        const parsed = JSON.parse(report.content);
         const targetLabel =
           parsed.target === "ORIGINAL"
             ? "🇯🇵 Original / Raw"
-            : "🌐 Translated Image"; //[cite: 6]
+            : "🌐 Translated Image";
 
         const isPixiv = /pixiv\.net/i.test(parsed.tweetUrl || "");
         const sourceLabel = isPixiv
@@ -201,11 +230,11 @@ export async function POST(req: NextRequest) {
           : "🐦 **Source (X / Twitter):**";
 
         formattedChange =
-          `🎯 **Target:** \`${targetLabel}\`\n` + //[cite: 6]
+          `🎯 **Target:** \`${targetLabel}\`\n` +
           `${sourceLabel} ${parsed.tweetUrl}` +
-          (parsed.note ? `\n📝 **Note:** ${parsed.note}` : ""); //[cite: 6]
+          (parsed.note ? `\n📝 **Note:** ${parsed.note}` : "");
       } catch {
-        formattedChange = `🖼️ **Details:** ${report.content}`; //[cite: 6]
+        formattedChange = `🖼️ **Details:** ${report.content}`;
       }
     } else if (report.type === "IRRELEVANT_CONTENT") {
       displayType = "Not Umamusume / Irrelevant";
@@ -218,7 +247,7 @@ export async function POST(req: NextRequest) {
     const discordPayload = {
       embeds: [
         {
-          title: `📢 New Report for Post: \`${report.postId}\``, //[cite: 6]
+          title: `📢 New Report for Post: \`${report.postId}\``,
           color:
             report.type === "IRRELEVANT_CONTENT"
               ? 0xef4444
@@ -235,57 +264,57 @@ export async function POST(req: NextRequest) {
             : undefined,
           fields: [
             {
-              name: "Action / Type", //[cite: 6]
-              value: `\`${displayType}\``, //[cite: 6]
-              inline: true, //[cite: 6]
+              name: "Action / Type",
+              value: `\`${displayType}\``,
+              inline: true,
             },
             {
-              name: "Report ID", //[cite: 6]
-              value: `\`${report.id}\``, //[cite: 6]
-              inline: true, //[cite: 6]
+              name: "Report ID",
+              value: `\`${report.id}\``,
+              inline: true,
             },
             {
-              name: "Proposed Change", //[cite: 6]
-              value: formattedChange, //[cite: 6]
-              inline: false, //[cite: 6]
+              name: "Proposed Change",
+              value: formattedChange,
+              inline: false,
             },
             {
-              name: "Comic Link", //[cite: 6]
-              value: `[🔗 Click to view comic on web](${comicLink})`, //[cite: 6]
-              inline: false, //[cite: 6]
+              name: "Comic Link",
+              value: `[🔗 Click to view comic on web](${comicLink})`,
+              inline: false,
             },
           ],
           footer: {
-            text: "Umazing Index Moderation System", //[cite: 6]
+            text: "Umazing Index Moderation System",
           },
-          timestamp: new Date().toISOString(), //[cite: 6]
+          timestamp: new Date().toISOString(),
         },
       ],
       components: [
         {
-          type: 1, // ActionRow[cite: 6]
+          type: 1, // ActionRow
           components: [
             {
-              type: 2, // Button[cite: 6]
-              style: 3, // Success (Green)[cite: 6]
-              label: "Approve", //[cite: 6]
-              custom_id: `approve:${report.id}`, //[cite: 6]
+              type: 2, // Button
+              style: 3, // Success (Green)
+              label: "Approve",
+              custom_id: `approve:${report.id}`,
             },
             {
-              type: 2, // Button[cite: 6]
-              style: 4, // Danger (Red)[cite: 6]
-              label: "Reject", //[cite: 6]
-              custom_id: `reject:${report.id}`, //[cite: 6]
+              type: 2, // Button
+              style: 4, // Danger (Red)
+              label: "Reject",
+              custom_id: `reject:${report.id}`,
             },
           ],
         },
       ],
     };
 
-    // 7. Gửi tin nhắn vào Discord Channel qua Bot Token hoặc Webhook[cite: 6]
-    const channelId = process.env.DISCORD_CHANNEL_ID; //[cite: 6]
-    const botToken = process.env.DISCORD_BOT_TOKEN; //[cite: 6]
-    const webhookUrl = process.env.DISCORD_WEBHOOK_URL; //[cite: 6]
+    // 7. Gửi tin nhắn vào Discord Channel qua Bot Token hoặc Webhook
+    const channelId = process.env.DISCORD_CHANNEL_ID;
+    const botToken = process.env.DISCORD_BOT_TOKEN;
+    const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
 
     if (channelId && botToken) {
       await fetch(
@@ -298,24 +327,24 @@ export async function POST(req: NextRequest) {
           },
           body: JSON.stringify(discordPayload),
         },
-      ); //[cite: 6]
+      );
     } else if (webhookUrl) {
       await fetch(webhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(discordPayload),
-      }); //[cite: 6]
+      });
     }
 
     return NextResponse.json({
       success: true,
       reportId: report.id,
-    }); //[cite: 6]
+    });
   } catch (error: unknown) {
-    console.error("Error submitting report:", error); //[cite: 6]
+    console.error("Error submitting report:", error);
     return NextResponse.json(
       { error: "Internal server error." },
       { status: 500 },
-    ); //[cite: 6]
+    );
   }
 }
