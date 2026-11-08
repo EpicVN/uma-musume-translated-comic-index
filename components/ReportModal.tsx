@@ -30,14 +30,17 @@ interface ReportModalProps {
 }
 
 const CATEGORIES = [
-  { value: "ADD_TAG", label: "➕ Add Missing Character Tag(s)" },
-  { value: "REMOVE_TAG", label: "❌ Remove Redundant/Wrong Tag(s)" },
+  { value: "UPDATE_TAGS", label: "🏷️ Add / Remove Character Tags" },
   { value: "REPLACE_TAG", label: "🔄 Replace Incorrect Tag" },
   {
     value: "ORIGINAL_LINK",
     label: "🔗 Add / Update Original Link (X / Pixiv)",
   },
   { value: "BROKEN_MEDIA", label: "🖼️ Broken / Missing Image" },
+  {
+    value: "IRRELEVANT_CONTENT",
+    label: "🚫 Not Umamusume / Irrelevant Content",
+  },
 ];
 
 // Helper kiểm tra xem URL có đúng định dạng Twitter/X hoặc Pixiv không
@@ -62,7 +65,7 @@ export default function ReportModal({
   currentTags = [],
 }: ReportModalProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [type, setType] = useState<string>("ADD_TAG");
+  const [type, setType] = useState<string>("UPDATE_TAGS");
   const [content, setContent] = useState("");
   const [selectedOldTag, setSelectedOldTag] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -182,7 +185,7 @@ export default function ReportModal({
   });
 
   const isFormValid = () => {
-    if (type === "ADD_TAG" || type === "REMOVE_TAG") {
+    if (type === "UPDATE_TAGS") {
       return selectedTags.length > 0;
     }
     if (type === "REPLACE_TAG") {
@@ -193,6 +196,9 @@ export default function ReportModal({
     }
     if (type === "BROKEN_MEDIA") {
       return Boolean(brokenUrl.trim());
+    }
+    if (type === "IRRELEVANT_CONTENT") {
+      return true;
     }
     return Boolean(content.trim());
   };
@@ -224,17 +230,10 @@ export default function ReportModal({
     let finalType = type;
     let finalContent = content.trim();
 
-    if (type === "ADD_TAG") {
+    if (type === "UPDATE_TAGS") {
       finalType = "CHARACTER_TAG";
       finalContent = JSON.stringify({
-        action: "ADD",
-        tags: selectedTags,
-        tag: selectedTags.join(", "),
-      });
-    } else if (type === "REMOVE_TAG") {
-      finalType = "CHARACTER_TAG";
-      finalContent = JSON.stringify({
-        action: "REMOVE",
+        action: "UPDATE",
         tags: selectedTags,
         tag: selectedTags.join(", "),
       });
@@ -252,6 +251,9 @@ export default function ReportModal({
         tweetUrl: brokenUrl.trim(),
         note: brokenNote.trim(),
       });
+    } else if (type === "IRRELEVANT_CONTENT") {
+      finalType = "IRRELEVANT_CONTENT";
+      finalContent = content.trim();
     }
 
     try {
@@ -305,13 +307,13 @@ export default function ReportModal({
 
   const modalContent = isOpen ? (
     <div
-      className="fixed inset-0 z-99999 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-99999 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in duration-150"
       onClick={handleClose}
     >
       <div
         ref={modalRef}
         onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-md bg-[#0b1622] border-t sm:border border-[#27364b] rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col text-white relative max-h-[92vh] overflow-hidden"
+        className="w-full sm:max-w-md bg-[#0b1622] border-t sm:border border-[#27364b] rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col text-white relative max-h-[100dvh] sm:max-h-[92vh] overflow-hidden"
       >
         {/* Mobile handle indicator */}
         <div className="w-12 h-1 bg-[#1e2d42] rounded-full mx-auto my-2.5 shrink-0 sm:hidden" />
@@ -351,435 +353,499 @@ export default function ReportModal({
           </div>
         </div>
 
-        {/* Form Body */}
+        {/* Form Body - Thiết lập cuộn linh hoạt theo bàn phím */}
         <form
           onSubmit={handleSubmit}
-          className="p-5 space-y-4 overflow-y-auto flex-1"
+          className="flex flex-col flex-1 overflow-hidden"
         >
-          {/* Honeypot field */}
-          <div className="hidden" aria-hidden="true">
-            <input
-              type="text"
-              name="website_verify"
-              tabIndex={-1}
-              value={honeypot}
-              onChange={(e) => setHoneypot(e.target.value)}
-              autoComplete="off"
-            />
-          </div>
+          {/* Vùng chứa nội dung nhập liệu tự động thu nhỏ có thanh cuộn */}
+          <div className="p-5 space-y-4 overflow-y-auto flex-1 overscroll-contain pb-24">
+            {/* Honeypot field */}
+            <div className="hidden" aria-hidden="true">
+              <input
+                type="text"
+                name="website_verify"
+                tabIndex={-1}
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
 
-          {/* 1. CUSTOM ISSUE CATEGORY */}
-          <div ref={categoryDropdownRef} className="relative">
-            <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
-              Issue Category
-            </label>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => setIsCategoryMenuOpen((prev) => !prev)}
-              className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-left text-white rounded-xl px-3.5 py-3 flex items-center justify-between transition cursor-pointer disabled:opacity-50"
-            >
-              <span className="font-semibold text-white">
-                {selectedCategoryLabel}
-              </span>
-              <span className="text-[#8ba0b2] text-[10px] ml-2">
-                {isCategoryMenuOpen ? "▲" : "▼"}
-              </span>
-            </button>
+            {/* 1. CUSTOM ISSUE CATEGORY */}
+            <div ref={categoryDropdownRef} className="relative">
+              <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
+                Issue Category
+              </label>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => setIsCategoryMenuOpen((prev) => !prev)}
+                className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-left text-white rounded-xl px-3.5 py-3 flex items-center justify-between transition cursor-pointer disabled:opacity-50"
+              >
+                <span className="font-semibold text-white truncate pr-2">
+                  {selectedCategoryLabel}
+                </span>
+                <span className="text-[#8ba0b2] text-[10px] shrink-0">
+                  {isCategoryMenuOpen ? "▲" : "▼"}
+                </span>
+              </button>
 
-            {isCategoryMenuOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-[#0e1b2a] border border-[#27364b] rounded-xl shadow-2xl z-70 overflow-hidden divide-y divide-[#1e2d42] max-h-56 overflow-y-auto">
-                {CATEGORIES.map((cat) => (
-                  <button
-                    key={cat.value}
-                    type="button"
-                    onClick={() => {
-                      setType(cat.value);
-                      setContent("");
-                      setSelectedOldTag("");
-                      setSelectedTags([]);
-                      setIsCharMenuOpen(false);
-                      setCharSearch("");
-                      setIsCategoryMenuOpen(false);
-                      setBrokenUrl("");
-                      setBrokenNote("");
-                    }}
-                    className={`w-full text-left px-3.5 py-2.5 text-xs transition cursor-pointer flex items-center justify-between hover:bg-[#1a2b40] ${
-                      type === cat.value
-                        ? "bg-[#1f3652] text-[#3db4f2] font-bold"
-                        : "text-zinc-200"
-                    }`}
-                  >
-                    <span>{cat.label}</span>
-                    {type === cat.value && (
-                      <span className="text-[#3db4f2] text-xs">✓</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 2. DYNAMIC FIELDS */}
-          <div>
-            {/* ADD TAG (MULTI-SELECT) */}
-            {type === "ADD_TAG" && (
-              <div>
-                <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
-                  Select Characters to Add ({selectedTags.length} selected):
-                </label>
-                <div ref={charDropdownRef} className="relative">
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => setIsCharMenuOpen((prev) => !prev)}
-                    className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-left text-white rounded-xl px-3.5 py-3 flex items-center justify-between transition cursor-pointer disabled:opacity-50"
-                  >
-                    <span
-                      className={
-                        selectedTags.length > 0
-                          ? "text-white font-medium"
-                          : "text-[#5a6f82]"
-                      }
+              {isCategoryMenuOpen && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-[#0e1b2a] border border-[#27364b] rounded-xl shadow-2xl z-70 overflow-hidden divide-y divide-[#1e2d42] max-h-56 overflow-y-auto overscroll-contain">
+                  {CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.value}
+                      type="button"
+                      onClick={() => {
+                        setType(cat.value);
+                        setContent("");
+                        setSelectedOldTag("");
+                        setSelectedTags([]);
+                        setIsCharMenuOpen(false);
+                        setCharSearch("");
+                        setIsCategoryMenuOpen(false);
+                        setBrokenUrl("");
+                        setBrokenNote("");
+                      }}
+                      className={`w-full text-left px-3.5 py-2.5 text-xs transition cursor-pointer flex items-center justify-between hover:bg-[#1a2b40] ${
+                        type === cat.value
+                          ? "bg-[#1f3652] text-[#3db4f2] font-bold"
+                          : "text-zinc-200"
+                      }`}
                     >
-                      {selectedTags.length > 0
-                        ? `${selectedTags.length} character(s) selected`
-                        : "-- Choose characters from list --"}
-                    </span>
-                    <span className="text-[#8ba0b2] text-[10px] ml-2">
-                      {isCharMenuOpen ? "▲" : "▼"}
-                    </span>
-                  </button>
+                      <span className="truncate pr-2">{cat.label}</span>
+                      {type === cat.value && (
+                        <span className="text-[#3db4f2] text-xs shrink-0">
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-                  {isCharMenuOpen && (
-                    <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#0e1b2a] border border-[#27364b] rounded-xl shadow-2xl z-60 overflow-hidden flex flex-col">
-                      <div className="p-2 border-b border-[#1e2d42] bg-[#132032]">
-                        <input
-                          type="text"
-                          autoFocus
-                          value={charSearch}
-                          onChange={(e) => setCharSearch(e.target.value)}
-                          placeholder="Type to filter (e.g. Spe, Suzuka, スペ)..."
-                          className="w-full bg-[#182638] border border-[#2b3c52] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-lg px-2.5 py-1.5 focus:outline-none transition"
-                        />
-                      </div>
-                      <div className="max-h-48 overflow-y-auto divide-y divide-[#1e2d42]/50">
-                        {filteredCharacters.length > 0 ? (
-                          filteredCharacters.map((char) => {
-                            const isSelected = selectedTags.includes(char.name);
-                            return (
-                              <button
-                                type="button"
-                                key={char.slug}
-                                onClick={() => handleToggleTag(char.name)}
-                                className={`w-full text-left px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between hover:bg-[#1a2b40] ${
-                                  isSelected
-                                    ? "bg-[#1f3652] text-[#3db4f2] font-semibold"
-                                    : "text-zinc-200"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {isSelected && (
-                                    <span className="text-[#3db4f2] text-xs font-bold">
-                                      ✓
-                                    </span>
-                                  )}
-                                  <span>{char.name}</span>
-                                </div>
-                                <span className="text-[11px] text-[#8ba0b2]">
-                                  {char.jp}
-                                </span>
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <div className="px-3 py-4 text-center text-xs text-[#5a6f82]">
-                            No character matched &quot;{charSearch}&quot;
+            {/* 2. DYNAMIC FIELDS */}
+            <div>
+              {/* 🌟 UPDATE TAGS */}
+              {type === "UPDATE_TAGS" && (
+                <div className="space-y-5">
+                  {/* PHẦN 1: TÌM & THÊM NHÂN VẬT MỚI */}
+                  <div>
+                    <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
+                      1. Add Missing Characters:
+                    </label>
+                    <div ref={charDropdownRef} className="relative">
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => setIsCharMenuOpen((prev) => !prev)}
+                        className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-left text-white rounded-xl px-3.5 py-3 flex items-center justify-between transition cursor-pointer disabled:opacity-50"
+                      >
+                        <span className="text-[#5a6f82]">
+                          -- Search and add characters --
+                        </span>
+                        <span className="text-[#8ba0b2] text-[10px] ml-2 shrink-0">
+                          {isCharMenuOpen ? "▲" : "▼"}
+                        </span>
+                      </button>
+
+                      {isCharMenuOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#0e1b2a] border border-[#27364b] rounded-xl shadow-2xl z-60 overflow-hidden flex flex-col">
+                          <div className="p-2 border-b border-[#1e2d42] bg-[#132032]">
+                            <input
+                              type="text"
+                              autoFocus
+                              value={charSearch}
+                              onChange={(e) => setCharSearch(e.target.value)}
+                              placeholder="Type to filter (e.g. Spe, Suzuka, スペ)..."
+                              className="w-full bg-[#182638] border border-[#2b3c52] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-lg px-2.5 py-1.5 focus:outline-none transition"
+                            />
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                          <div className="max-h-48 overflow-y-auto divide-y divide-[#1e2d42]/50 overscroll-contain">
+                            {filteredCharacters.length > 0 ? (
+                              filteredCharacters.map((char) => {
+                                // Chặn hiển thị những nhân vật đã có trong truyện rồi
+                                const isAlreadyInPost = currentTags.some(
+                                  (t) => t.name === char.name,
+                                );
+                                if (isAlreadyInPost) return null;
 
-                {selectedTags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2.5">
-                    {selectedTags.map((tagName) => (
-                      <span
-                        key={tagName}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#3db4f2]/20 border border-[#3db4f2]/50 text-[#3db4f2] text-xs font-semibold shadow-xs"
-                      >
-                        <span>{tagName}</span>
-                        <button
-                          type="button"
-                          disabled={isSubmitting}
-                          onClick={() => handleToggleTag(tagName)}
-                          className="hover:text-rose-400 text-xs font-bold leading-none cursor-pointer"
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* REMOVE TAG (MULTI-SELECT) */}
-            {type === "REMOVE_TAG" && (
-              <div>
-                <label className="block text-xs font-medium text-[#8ba0b2] mb-2">
-                  Select Tag(s) to Remove ({selectedTags.length} selected):
-                </label>
-                {currentTags.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {currentTags.map((t) => {
-                      const isSelected = selectedTags.includes(t.name);
-                      return (
-                        <button
-                          key={t.id || t.name}
-                          type="button"
-                          disabled={isSubmitting}
-                          onClick={() => handleToggleTag(t.name)}
-                          className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                            isSelected
-                              ? "bg-rose-500/20 border-rose-500 text-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.3)] scale-105"
-                              : "bg-[#151f2e] border-[#27364b] hover:border-rose-500/50 text-[#bcbedc]"
-                          }`}
-                        >
-                          <span>🏷️ {t.name}</span>
-                          {isSelected ? (
-                            <span className="text-xs font-black">✕</span>
-                          ) : (
-                            <span className="text-xs text-[#5a6f82]">+</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-xs text-amber-400/90 bg-amber-400/10 p-3 rounded-xl border border-amber-400/20">
-                    This post currently has no character tags to remove.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* REPLACE TAG (1 - 1) */}
-            {type === "REPLACE_TAG" && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-[#8ba0b2] mb-2">
-                    1. Select Tag to Replace:
-                  </label>
-                  {currentTags.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {currentTags.map((t) => {
-                        const isSelected = selectedOldTag === t.name;
-                        return (
-                          <button
-                            key={t.id || t.name}
-                            type="button"
-                            disabled={isSubmitting}
-                            onClick={() => setSelectedOldTag(t.name)}
-                            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                              isSelected
-                                ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
-                                : "bg-[#151f2e] border-[#27364b] hover:border-amber-500/50 text-[#bcbedc]"
-                            }`}
-                          >
-                            🏷️ {t.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-amber-400/90 bg-amber-400/10 p-3 rounded-xl border border-amber-400/20">
-                      This post currently has no tags to replace.
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
-                    2. Correct Replacement Character:
-                  </label>
-                  <div ref={charDropdownRef} className="relative">
-                    <button
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => setIsCharMenuOpen((prev) => !prev)}
-                      className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-left text-white rounded-xl px-3.5 py-3 flex items-center justify-between transition cursor-pointer disabled:opacity-50"
-                    >
-                      <span
-                        className={
-                          content ? "text-white font-medium" : "text-[#5a6f82]"
-                        }
-                      >
-                        {content || "-- Choose replacement character --"}
-                      </span>
-                      <span className="text-[#8ba0b2] text-[10px] ml-2">
-                        {isCharMenuOpen ? "▲" : "▼"}
-                      </span>
-                    </button>
-
-                    {isCharMenuOpen && (
-                      <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#0e1b2a] border border-[#27364b] rounded-xl shadow-2xl z-60 overflow-hidden flex flex-col">
-                        <div className="p-2 border-b border-[#1e2d42] bg-[#132032]">
-                          <input
-                            type="text"
-                            autoFocus
-                            value={charSearch}
-                            onChange={(e) => setCharSearch(e.target.value)}
-                            placeholder="Type to filter (e.g. Spe, Suzuka, スペ)..."
-                            className="w-full bg-[#182638] border border-[#2b3c52] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-lg px-2.5 py-1.5 focus:outline-none transition"
-                          />
+                                const isSelected = selectedTags.includes(
+                                  char.name,
+                                );
+                                return (
+                                  <button
+                                    type="button"
+                                    key={char.slug}
+                                    onClick={() => {
+                                      handleToggleTag(char.name);
+                                      setCharSearch(""); // Tự động xoá text sau khi chọn
+                                    }}
+                                    className={`w-full text-left px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between hover:bg-[#1a2b40] ${
+                                      isSelected
+                                        ? "bg-[#1f3652] text-[#3db4f2] font-semibold"
+                                        : "text-zinc-200"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2 truncate pr-2">
+                                      {isSelected && (
+                                        <span className="text-[#3db4f2] text-xs font-bold shrink-0">
+                                          ✓
+                                        </span>
+                                      )}
+                                      <span className="truncate">
+                                        {char.name}
+                                      </span>
+                                    </div>
+                                    <span className="text-[11px] text-[#8ba0b2] shrink-0 whitespace-nowrap">
+                                      {char.jp}
+                                    </span>
+                                  </button>
+                                );
+                              })
+                            ) : (
+                              <div className="px-3 py-4 text-center text-xs text-[#5a6f82]">
+                                No character matched &quot;{charSearch}&quot;
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="max-h-48 overflow-y-auto divide-y divide-[#1e2d42]/50">
-                          {filteredCharacters.length > 0 ? (
-                            filteredCharacters.map((char) => (
+                      )}
+                    </div>
+
+                    {/* Hiển thị những nhân vật mới vừa được thêm */}
+                    {selectedTags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2.5">
+                        {selectedTags
+                          .filter((tagName) => !tagName.startsWith("REMOVE::")) // 🌟 THÊM DÒNG NÀY ĐỂ LỌC
+                          .map((tagName) => (
+                            <span
+                              key={tagName}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 text-xs font-semibold shadow-xs animate-in fade-in zoom-in-95"
+                            >
+                              <span>+ {tagName}</span>
                               <button
                                 type="button"
-                                key={char.slug}
-                                onClick={() => {
-                                  setContent(char.name);
-                                  setIsCharMenuOpen(false);
-                                  setCharSearch("");
-                                }}
-                                className={`w-full text-left px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between hover:bg-[#1a2b40] ${
-                                  content === char.name
-                                    ? "bg-[#1f3652] text-[#3db4f2] font-semibold"
-                                    : "text-zinc-200"
-                                }`}
+                                disabled={isSubmitting}
+                                onClick={() => handleToggleTag(tagName)}
+                                className="hover:text-emerald-200 text-xs font-bold leading-none cursor-pointer p-0.5"
                               >
-                                <span>{char.name}</span>
-                                <span className="text-[11px] text-[#8ba0b2]">
-                                  {char.jp}
-                                </span>
+                                ✕
                               </button>
-                            ))
-                          ) : (
-                            <div className="px-3 py-4 text-center text-xs text-[#5a6f82]">
-                              No character matched &quot;{charSearch}&quot;
-                            </div>
-                          )}
-                        </div>
+                            </span>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-[#1e2d42] pt-4" />
+
+                  {/* PHẦN 2: XOÁ NHỮNG NHÂN VẬT ĐÃ CÓ (SAI/DƯ) */}
+                  <div>
+                    <label className="block text-xs font-medium text-[#8ba0b2] mb-2">
+                      2. Remove Incorrect / Redundant Characters:
+                    </label>
+                    {currentTags.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {currentTags.map((t) => {
+                          const isMarkedForRemoval = selectedTags.includes(
+                            `REMOVE::${t.name}`,
+                          );
+                          return (
+                            <button
+                              key={t.id || t.name}
+                              type="button"
+                              disabled={isSubmitting}
+                              onClick={() =>
+                                handleToggleTag(`REMOVE::${t.name}`)
+                              }
+                              className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                isMarkedForRemoval
+                                  ? "bg-rose-500/20 border-rose-500 text-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.3)] scale-105"
+                                  : "bg-[#151f2e] border-[#27364b] hover:border-rose-500/50 text-[#bcbedc]"
+                              }`}
+                            >
+                              <span
+                                className={
+                                  isMarkedForRemoval
+                                    ? "line-through opacity-70"
+                                    : ""
+                                }
+                              >
+                                🏷️ {t.name}
+                              </span>
+                              {isMarkedForRemoval ? (
+                                <span className="text-xs font-black shrink-0">
+                                  Undo
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-[#5a6f82] shrink-0">
+                                  ✖
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-zinc-400 bg-[#151f2e] p-3 rounded-xl border border-[#27364b]">
+                        This post currently has no character tags.
                       </div>
                     )}
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* 🌟 ORIGINAL LINK: HỖ TRỢ CẢ TWITTER VÀ PIXIV */}
-            {type === "ORIGINAL_LINK" && (
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-[#8ba0b2]">
-                  Original Post Link (X / Twitter or Pixiv):
-                </label>
-                <input
-                  type="url"
-                  required
-                  disabled={isSubmitting}
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="https://x.com/.../status/... or https://pixiv.net/artworks/..."
-                  className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-xl px-3.5 py-3 focus:outline-none transition disabled:opacity-50"
-                />
-                <p className="text-[11px] text-[#5a6f82] leading-tight">
-                  Supports X.com / Twitter status links and Pixiv artwork URLs.
-                </p>
-              </div>
-            )}
+              {/* REPLACE TAG (1 - 1) */}
+              {type === "REPLACE_TAG" && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-[#8ba0b2] mb-2">
+                      1. Select Tag to Replace:
+                    </label>
+                    {currentTags.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {currentTags.map((t) => {
+                          const isSelected = selectedOldTag === t.name;
+                          return (
+                            <button
+                              key={t.id || t.name}
+                              type="button"
+                              disabled={isSubmitting}
+                              onClick={() => setSelectedOldTag(t.name)}
+                              className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                                isSelected
+                                  ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
+                                  : "bg-[#151f2e] border-[#27364b] hover:border-amber-500/50 text-[#bcbedc]"
+                              }`}
+                            >
+                              🏷️ {t.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-amber-400/90 bg-amber-400/10 p-3 rounded-xl border border-amber-400/20">
+                        This post currently has no tags to replace.
+                      </div>
+                    )}
+                  </div>
 
-            {/* 🌟 BROKEN MEDIA: HỖ TRỢ NGUỒN TWITTER VÀ PIXIV */}
-            {type === "BROKEN_MEDIA" && (
-              <div className="space-y-3.5">
-                <div>
-                  <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
-                    Select Image Source to Fix:
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => setBrokenTarget("TRANSLATED")}
-                      className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                        brokenTarget === "TRANSLATED"
-                          ? "bg-[#3db4f2]/20 border-[#3db4f2] text-[#3db4f2] shadow-[0_0_12px_rgba(61,180,242,0.25)]"
-                          : "bg-[#151f2e] border-[#27364b] hover:border-[#3db4f2]/50 text-[#8ba0b2] hover:text-white"
-                      }`}
-                    >
-                      <span>🌐 Translated Image</span>
-                      {brokenTarget === "TRANSLATED" && <span>✓</span>}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => setBrokenTarget("ORIGINAL")}
-                      className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                        brokenTarget === "ORIGINAL"
-                          ? "bg-[#3db4f2]/20 border-[#3db4f2] text-[#3db4f2] shadow-[0_0_12px_rgba(61,180,242,0.25)]"
-                          : "bg-[#151f2e] border-[#27364b] hover:border-[#3db4f2]/50 text-[#8ba0b2] hover:text-white"
-                      }`}
-                    >
-                      <span>🇯🇵 Original / Raw</span>
-                      {brokenTarget === "ORIGINAL" && <span>✓</span>}
-                    </button>
+                  <div>
+                    <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
+                      2. Correct Replacement Character:
+                    </label>
+                    <div ref={charDropdownRef} className="relative">
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => setIsCharMenuOpen((prev) => !prev)}
+                        className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-left text-white rounded-xl px-3.5 py-3 flex items-center justify-between transition cursor-pointer disabled:opacity-50"
+                      >
+                        <span
+                          className={
+                            content
+                              ? "text-white font-medium"
+                              : "text-[#5a6f82]"
+                          }
+                        >
+                          {content || "-- Choose replacement character --"}
+                        </span>
+                        <span className="text-[#8ba0b2] text-[10px] ml-2">
+                          {isCharMenuOpen ? "▲" : "▼"}
+                        </span>
+                      </button>
+
+                      {isCharMenuOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#0e1b2a] border border-[#27364b] rounded-xl shadow-2xl z-60 overflow-hidden flex flex-col">
+                          <div className="p-2 border-b border-[#1e2d42] bg-[#132032]">
+                            <input
+                              type="text"
+                              autoFocus
+                              value={charSearch}
+                              onChange={(e) => setCharSearch(e.target.value)}
+                              placeholder="Type to filter (e.g. Spe, Suzuka, スペ)..."
+                              className="w-full bg-[#182638] border border-[#2b3c52] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-lg px-2.5 py-1.5 focus:outline-none transition"
+                            />
+                          </div>
+                          <div className="max-h-48 overflow-y-auto divide-y divide-[#1e2d42]/50 overscroll-contain">
+                            {filteredCharacters.length > 0 ? (
+                              filteredCharacters.map((char) => (
+                                <button
+                                  type="button"
+                                  key={char.slug}
+                                  onClick={() => {
+                                    setContent(char.name);
+                                    setIsCharMenuOpen(false);
+                                    setCharSearch("");
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-xs transition cursor-pointer flex items-center justify-between hover:bg-[#1a2b40] ${
+                                    content === char.name
+                                      ? "bg-[#1f3652] text-[#3db4f2] font-semibold"
+                                      : "text-zinc-200"
+                                  }`}
+                                >
+                                  <span className="truncate pr-2">
+                                    {char.name}
+                                  </span>
+                                  <span className="text-[11px] text-[#8ba0b2] shrink-0 whitespace-nowrap">
+                                    {char.jp}
+                                  </span>
+                                </button>
+                              ))
+                            ) : (
+                              <div className="px-3 py-4 text-center text-xs text-[#5a6f82]">
+                                No character matched &quot;{charSearch}&quot;
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
+              )}
 
+              {/* 🌟 ORIGINAL LINK: HỖ TRỢ CẢ TWITTER VÀ PIXIV */}
+              {type === "ORIGINAL_LINK" && (
                 <div className="space-y-1.5">
                   <label className="block text-xs font-medium text-[#8ba0b2]">
-                    Source Post Link (X / Twitter or Pixiv):
+                    Original Post Link (X / Twitter or Pixiv):
                   </label>
                   <input
                     type="url"
                     required
                     disabled={isSubmitting}
-                    value={brokenUrl}
-                    onChange={(e) => setBrokenUrl(e.target.value)}
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
                     placeholder="https://x.com/.../status/... or https://pixiv.net/artworks/..."
                     className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-xl px-3.5 py-3 focus:outline-none transition disabled:opacity-50"
                   />
                   <p className="text-[11px] text-[#5a6f82] leading-tight">
-                    Provide the Twitter/X or Pixiv link containing the
-                    replacement images.
+                    Supports X.com / Twitter status links and Pixiv artwork
+                    URLs.
                   </p>
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
-                    Additional Notes (Optional):
-                  </label>
-                  <textarea
-                    rows={2}
-                    disabled={isSubmitting}
-                    value={brokenNote}
-                    onChange={(e) => setBrokenNote(e.target.value)}
-                    placeholder="e.g. page 2 is missing, wrong resolution,..."
-                    className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-xl p-3 focus:outline-none transition disabled:opacity-50 resize-none"
-                  />
+              {/* 🌟 BROKEN MEDIA: HỖ TRỢ NGUỒN TWITTER VÀ PIXIV */}
+              {type === "BROKEN_MEDIA" && (
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
+                      Select Image Source to Fix:
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => setBrokenTarget("TRANSLATED")}
+                        className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          brokenTarget === "TRANSLATED"
+                            ? "bg-[#3db4f2]/20 border-[#3db4f2] text-[#3db4f2] shadow-[0_0_12px_rgba(61,180,242,0.25)]"
+                            : "bg-[#151f2e] border-[#27364b] hover:border-[#3db4f2]/50 text-[#8ba0b2] hover:text-white"
+                        }`}
+                      >
+                        <span className="truncate">🌐 Translated Image</span>
+                        {brokenTarget === "TRANSLATED" && (
+                          <span className="shrink-0">✓</span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => setBrokenTarget("ORIGINAL")}
+                        className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          brokenTarget === "ORIGINAL"
+                            ? "bg-[#3db4f2]/20 border-[#3db4f2] text-[#3db4f2] shadow-[0_0_12px_rgba(61,180,242,0.25)]"
+                            : "bg-[#151f2e] border-[#27364b] hover:border-[#3db4f2]/50 text-[#8ba0b2] hover:text-white"
+                        }`}
+                      >
+                        <span className="truncate">🇯🇵 Original / Raw</span>
+                        {brokenTarget === "ORIGINAL" && (
+                          <span className="shrink-0">✓</span>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-medium text-[#8ba0b2]">
+                      Source Post Link (X / Twitter or Pixiv):
+                    </label>
+                    <input
+                      type="url"
+                      required
+                      disabled={isSubmitting}
+                      value={brokenUrl}
+                      onChange={(e) => setBrokenUrl(e.target.value)}
+                      placeholder="https://x.com/.../status/... or https://pixiv.net/artworks/..."
+                      className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-xl px-3.5 py-3 focus:outline-none transition disabled:opacity-50"
+                    />
+                    <p className="text-[11px] text-[#5a6f82] leading-tight">
+                      Provide the Twitter/X or Pixiv link containing the
+                      replacement images.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
+                      Additional Notes (Optional):
+                    </label>
+                    <textarea
+                      rows={2}
+                      disabled={isSubmitting}
+                      value={brokenNote}
+                      onChange={(e) => setBrokenNote(e.target.value)}
+                      placeholder="e.g. page 2 is missing, wrong resolution,..."
+                      className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-xl p-3 focus:outline-none transition disabled:opacity-50 resize-none"
+                    />
+                  </div>
                 </div>
+              )}
+
+              {/* 🌟 IRRELEVANT CONTENT (NOT UMAMUSUME) */}
+              {type === "IRRELEVANT_CONTENT" && (
+                <div className="space-y-3">
+                  <div className="text-xs text-rose-400 bg-rose-500/10 p-3 rounded-xl border border-rose-500/20 leading-relaxed">
+                    Flag this post if it contains content entirely unrelated to
+                    Umamusume (e.g., Blue Archive, Genshin, etc.) or is spam.
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[#8ba0b2] mb-1.5">
+                      Additional Notes (Optional):
+                    </label>
+                    <textarea
+                      rows={2}
+                      disabled={isSubmitting}
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      placeholder="Briefly explain what this comic is actually about..."
+                      className="w-full bg-[#151f2e] border border-[#27364b] focus:border-[#3db4f2] text-xs text-white placeholder-[#5a6f82] rounded-xl p-3 focus:outline-none transition disabled:opacity-50 resize-none"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Status Message */}
+            {statusMessage && (
+              <div
+                className={`p-3 rounded-xl text-xs font-medium ${
+                  statusMessage.isError
+                    ? "bg-rose-500/10 border border-rose-500/30 text-rose-400"
+                    : "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
+                }`}
+              >
+                {statusMessage.text}
               </div>
             )}
           </div>
 
-          {/* Status Message */}
-          {statusMessage && (
-            <div
-              className={`p-3 rounded-xl text-xs font-medium ${
-                statusMessage.isError
-                  ? "bg-rose-500/10 border border-rose-500/30 text-rose-400"
-                  : "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
-              }`}
-            >
-              {statusMessage.text}
-            </div>
-          )}
-
-          {/* Footer Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#1e2d42]">
+          {/* Footer Actions - Cố định (Sticky) ở dưới cùng để không bị che khuất */}
+          <div className="sticky bottom-0 bg-[#0b1622] border-t border-[#1e2d42] p-4 flex items-center justify-end gap-2.5 z-50 shrink-0">
             <button
               type="button"
               disabled={isSubmitting}

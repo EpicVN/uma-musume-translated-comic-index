@@ -73,7 +73,11 @@ export default function CharacterSearchSelect({
         className="w-full h-10 px-3 rounded-lg bg-[#0b1622] border border-[#27364b] hover:border-[#3db4f2]/70 text-left text-xs text-white flex items-center justify-between transition focus:outline-none focus:border-[#3db4f2] disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <span className="truncate pr-2">
-          {activeTag ? activeTag.name : "Any Character"}
+          {selectedSlug === "untagged"
+            ? "🏷️ Untagged Comics"
+            : activeTag
+              ? activeTag.name
+              : "Any Character"}
         </span>
         <span className="text-[#8ba0b2] text-[10px] shrink-0">▼</span>
       </button>
@@ -102,6 +106,21 @@ export default function CharacterSearchSelect({
               }`}
             >
               Any Character
+            </div>
+
+            {/* UNTAGGED COMICS */}
+            <div
+              onClick={() => !isPending && handleSelect("untagged")}
+              className={`px-3 py-2 cursor-pointer transition hover:bg-[#151f2e] flex items-center justify-between gap-2 ${
+                selectedSlug === "untagged"
+                  ? "text-rose-400 font-bold bg-[#151f2e]/60"
+                  : "text-rose-400/80"
+              }`}
+            >
+              <span className="truncate">🏷️ Untagged Comics</span>
+              <span className="text-[10px] shrink-0 opacity-70">
+                Needs Tagging
+              </span>
             </div>
 
             {filteredTags.length === 0 ? (

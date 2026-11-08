@@ -1878,5 +1878,24 @@
         "aliases": [
             "marilyn"
         ]
+    },
+    {
+        "slug": "manhattan-cafes-friend",
+        "name": "Manhattan Cafe's Friend",
+        "jp": "お友だち",
+        "aliases": [
+            "ghost",
+            "cafe's friend",
+            "cafe's ghost",
+            "Sunday Silence"
+        ]
+    },
+    {
+        "slug": "akitsu-teio",
+        "name": "Akitsu Teio",
+        "jp": "アキツテイオー",
+        "aliases": [
+            "akitsu"
+        ]
     }
 ]

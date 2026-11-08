@@ -478,9 +478,11 @@ export default function ReaderModal({
                       />
 
                       {/* Badge số trang góc trên phải */}
-                      <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white/50 text-[10px] font-black px-2 py-0.5 rounded-lg border border-white/10 pointer-events-none">
-                        P.{idx + 1}
-                      </div>
+                      {post.origMediaUrls.length > 1 && (
+                        <div className="absolute top-2.5 right-2.5 bg-black/30 hover:bg-black/60 backdrop-blur-sm text-white/60 hover:text-white transition-all text-[9px] font-bold px-2 py-0.5 rounded-full pointer-events-auto cursor-default">
+                          P.{idx + 1}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -566,9 +568,11 @@ export default function ReaderModal({
                         loading="lazy"
                         unoptimized
                       />
-                      <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-[#3db4f2]/50 text-[10px] font-black px-2 py-0.5 rounded-lg border border-white/10 pointer-events-none">
-                        P.{idx + 1}
-                      </div>
+                      {post.transMediaUrls.length > 1 && (
+                        <div className="absolute top-2.5 right-2.5 bg-black/30 hover:bg-black/60 backdrop-blur-sm text-[#3db4f2]/60 hover:text-[#3db4f2] transition-all text-[9px] font-bold px-2 py-0.5 rounded-full pointer-events-auto cursor-default">
+                          P.{idx + 1}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

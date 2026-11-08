@@ -909,6 +909,32 @@ export async function POST(req: NextRequest) {
               });
             }
 
+            // 🌟 1.4 HANDLE IRRELEVANT_CONTENT (XÓA TOÀN BỘ BÀI ĐĂNG)
+            else if (report.type === "IRRELEVANT_CONTENT") {
+              // 1. Xóa toàn bộ tag nhân vật liên kết với bài gốc
+              await prisma.postTag.deleteMany({
+                where: { postId: targetOriginalPostId },
+              });
+
+              // 2. Xóa toàn bộ các bản dịch liên quan đến bài gốc này
+              await prisma.translatedPost.deleteMany({
+                where: { originalPostId: targetOriginalPostId },
+              });
+
+              // 3. Xóa bài gốc
+              await prisma.originalPost.delete({
+                where: { id: targetOriginalPostId },
+              }).catch(() => {});
+
+              // 4. Xóa cache Next.js để truyện bay màu khỏi trang chủ ngay lập tức
+              revalidateComicUpdates({
+                postId: report.postId,
+                originalPostId: targetOriginalPostId,
+              });
+
+              appliedDetails = `🗑️ **Content Deleted:** The post and all its translations/tags have been permanently removed from the database.`;
+            }
+
             // Send PATCH update to Discord embed on success and dismiss action buttons
             await fetch(webhookEditUrl, {
               method: "PATCH",

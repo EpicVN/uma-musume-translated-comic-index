@@ -114,8 +114,21 @@ const getCachedPosts = (filter: FilterQuery) => {
         originalPostWhere.artist = { handle: filter.artist };
       }
 
+      // 🌟 LOGIC LỌC TAG (ĐÃ TÍCH HỢP UNTAGGED)
       if (filter.tag && filter.tag !== "all") {
-        originalPostWhere.tags = { some: { tag: { slug: filter.tag } } };
+        if (filter.tag === "untagged") {
+          originalPostWhere.tags = {
+            none: {
+              tag: {
+                slug: {
+                  not: "umamusume",
+                },
+              },
+            },
+          };
+        } else {
+          originalPostWhere.tags = { some: { tag: { slug: filter.tag } } };
+        }
       }
 
       if (Object.keys(originalPostWhere).length > 0) {
@@ -125,6 +138,7 @@ const getCachedPosts = (filter: FilterQuery) => {
       let orderBy: Prisma.TranslatedPostOrderByWithRelationInput = {
         postedAt: "desc",
       };
+
       if (filter.sort === "oldest") orderBy = { postedAt: "asc" };
       else if (filter.sort === "orig_newest")
         orderBy = { originalPost: { postedAt: "desc" } };

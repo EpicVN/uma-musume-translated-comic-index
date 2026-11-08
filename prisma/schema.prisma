@@ -160,10 +160,11 @@ model Series {
 // 6. Discord report admin
 // -------------------------------------------------------------
 enum ReportType {
-  ORIGINAL_LINK    // Bổ sung/sửa link gốc Twitter
-  CHARACTER_TAG    // Bổ sung Tag nhân vật
-  BROKEN_MEDIA     // Ảnh hỏng / lỗi
+  CHARACTER_TAG
+  ORIGINAL_LINK
+  BROKEN_MEDIA
   OTHER
+  IRRELEVANT_CONTENT
 }
 
 enum ReportStatus {

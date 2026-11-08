@@ -32,7 +32,13 @@ export async function POST(req: NextRequest) {
       ); //[cite: 6]
     }
 
-    const allowedTypes = ["CHARACTER_TAG", "ORIGINAL_LINK", "BROKEN_MEDIA"];
+    const allowedTypes = [
+      "CHARACTER_TAG",
+      "ORIGINAL_LINK",
+      "BROKEN_MEDIA",
+      "IRRELEVANT_CONTENT",
+    ];
+
     if (!allowedTypes.includes(type)) {
       return NextResponse.json(
         { error: "Invalid report type." },
@@ -201,6 +207,11 @@ export async function POST(req: NextRequest) {
       } catch {
         formattedChange = `🖼️ **Details:** ${report.content}`; //[cite: 6]
       }
+    } else if (report.type === "IRRELEVANT_CONTENT") {
+      displayType = "Not Umamusume / Irrelevant";
+      formattedChange = report.content
+        ? `📝 **User Note:** ${report.content}`
+        : `*(No additional note provided)*`;
     }
 
     // 6. Cấu trúc Payload gửi sang Discord API
@@ -208,7 +219,12 @@ export async function POST(req: NextRequest) {
       embeds: [
         {
           title: `📢 New Report for Post: \`${report.postId}\``, //[cite: 6]
-          color: /pixiv\.net/i.test(report.content) ? 0x0096fa : 0x38bdf8,
+          color:
+            report.type === "IRRELEVANT_CONTENT"
+              ? 0xef4444
+              : /pixiv\.net/i.test(report.content)
+                ? 0x0096fa
+                : 0x38bdf8,
           thumbnail: previewThumbnail
             ? {
                 url: previewThumbnail.replace(
