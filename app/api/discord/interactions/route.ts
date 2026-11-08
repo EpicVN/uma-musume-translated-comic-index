@@ -9,7 +9,7 @@ import { revalidatePath } from "next/cache";
 import { scrapeTweetData } from "@/lib/api-twitter-scraper";
 import { scrapePixivMetadata, extractPixivId } from "@/lib/scraper-pixiv";
 import { scrapeSinglePost } from "@/lib/scrape-single-api";
-import { waitUntil } from "@vercel/functions";
+// import { waitUntil } from "@vercel/functions";
 
 interface DiscordCommandOption {
   name: string;
@@ -232,8 +232,7 @@ export async function POST(req: NextRequest) {
         type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
       });
 
-      waitUntil(
-        (async () => {
+      void (async () => {
           const webhookEditUrl = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
 
           try {
@@ -334,8 +333,7 @@ export async function POST(req: NextRequest) {
               }),
             });
           }
-        })(),
-      );
+        })();
 
       return immediateResponse;
     }
@@ -377,7 +375,7 @@ export async function POST(req: NextRequest) {
       return translated?.originalPostId || null;
     };
 
-    waitUntil(
+
       (async () => {
         const webhookEditUrl = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
         const webhookFollowupUrl = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}`;
@@ -1083,8 +1081,7 @@ export async function POST(req: NextRequest) {
             }),
           });
         }
-      })(),
-    );
+      })();
 
     return immediateResponse;
   }
