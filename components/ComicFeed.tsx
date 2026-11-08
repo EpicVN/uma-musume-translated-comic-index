@@ -43,132 +43,125 @@ const searchCubariFiles = (query: string) => {
   });
 };
 
-const getCachedPosts = (filter: FilterQuery) => {
+const getPosts = async (filter: FilterQuery) => {
   const cleanQuery = filter.q?.trim() || "";
-  const cacheKey = `posts-v3-${filter.page}-${cleanQuery}-${filter.tag}-${filter.artist}-${filter.translator}-${filter.sort}`;
 
-  return unstable_cache(
-    async () => {
-      const where: Prisma.TranslatedPostWhereInput = {};
-      const originalPostWhere: Prisma.OriginalPostWhereInput = {};
+  const where: Prisma.TranslatedPostWhereInput = {};
+  const originalPostWhere: Prisma.OriginalPostWhereInput = {};
 
-      if (cleanQuery.length >= 2) {
-        where.OR = [
-          // 1. So khớp chính xác theo ID (CUID) hoặc Tweet ID
-          { id: cleanQuery },
-          { tweetId: cleanQuery },
-          { originalPostId: cleanQuery },
-          { originalPost: { id: cleanQuery } },
-          { originalPost: { tweetId: cleanQuery } },
+  if (cleanQuery.length >= 2) {
+    where.OR = [
+      // 1. So khớp chính xác theo ID (CUID) hoặc Tweet ID
+      { id: cleanQuery },
+      { tweetId: cleanQuery },
+      { originalPostId: cleanQuery },
+      { originalPost: { id: cleanQuery } },
+      { originalPost: { tweetId: cleanQuery } },
 
-          // 2. Tìm theo nội dung tweet
-          { content: { contains: cleanQuery, mode: "insensitive" } },
-          {
-            originalPost: {
-              content: { contains: cleanQuery, mode: "insensitive" },
-            },
+      // 2. Tìm theo nội dung tweet
+      { content: { contains: cleanQuery, mode: "insensitive" } },
+      {
+        originalPost: {
+          content: { contains: cleanQuery, mode: "insensitive" },
+        },
+      },
+
+      // 3. Tìm theo tên tác giả (Artist)
+      {
+        originalPost: {
+          artist: {
+            OR: [
+              { name: { contains: cleanQuery, mode: "insensitive" } },
+              { handle: { contains: cleanQuery, mode: "insensitive" } },
+            ],
           },
+        },
+      },
 
-          // 3. Tìm theo tên tác giả (Artist)
-          {
-            originalPost: {
-              artist: {
-                OR: [
-                  { name: { contains: cleanQuery, mode: "insensitive" } },
-                  { handle: { contains: cleanQuery, mode: "insensitive" } },
-                ],
-              },
-            },
-          },
+      // 4. Tìm theo người dịch (Translator)
+      {
+        translator: {
+          OR: [
+            { name: { contains: cleanQuery, mode: "insensitive" } },
+            { handle: { contains: cleanQuery, mode: "insensitive" } },
+          ],
+        },
+      },
 
-          // 4. Tìm theo người dịch (Translator)
-          {
-            translator: {
-              OR: [
-                { name: { contains: cleanQuery, mode: "insensitive" } },
-                { handle: { contains: cleanQuery, mode: "insensitive" } },
-              ],
-            },
-          },
-
-          // 5. Tìm theo tên Tag nhân vật
-          {
-            originalPost: {
-              tags: {
-                some: {
-                  tag: {
-                    name: { contains: cleanQuery, mode: "insensitive" },
-                  },
-                },
-              },
-            },
-          },
-        ];
-      }
-
-      if (filter.translator && filter.translator !== "all") {
-        where.translator = { handle: filter.translator };
-      }
-
-      if (filter.artist && filter.artist !== "all") {
-        originalPostWhere.artist = { handle: filter.artist };
-      }
-
-      // 🌟 LOGIC LỌC TAG (ĐÃ TÍCH HỢP UNTAGGED)
-      if (filter.tag && filter.tag !== "all") {
-        if (filter.tag === "untagged") {
-          originalPostWhere.tags = {
-            none: {
+      // 5. Tìm theo tên Tag nhân vật
+      {
+        originalPost: {
+          tags: {
+            some: {
               tag: {
-                slug: {
-                  not: "umamusume",
-                },
-              },
-            },
-          };
-        } else {
-          originalPostWhere.tags = { some: { tag: { slug: filter.tag } } };
-        }
-      }
-
-      if (Object.keys(originalPostWhere).length > 0) {
-        where.originalPost = originalPostWhere;
-      }
-
-      let orderBy: Prisma.TranslatedPostOrderByWithRelationInput = {
-        postedAt: "desc",
-      };
-
-      if (filter.sort === "oldest") orderBy = { postedAt: "asc" };
-      else if (filter.sort === "orig_newest")
-        orderBy = { originalPost: { postedAt: "desc" } };
-      else if (filter.sort === "orig_oldest")
-        orderBy = { originalPost: { postedAt: "asc" } };
-
-      const [totalCount, posts] = await Promise.all([
-        prisma.translatedPost.count({ where }),
-        prisma.translatedPost.findMany({
-          where,
-          skip: (filter.page - 1) * PAGE_SIZE,
-          take: PAGE_SIZE,
-          orderBy,
-          include: {
-            translator: true,
-            originalPost: {
-              include: {
-                artist: true,
-                tags: { include: { tag: true } },
+                name: { contains: cleanQuery, mode: "insensitive" },
               },
             },
           },
-        }),
-      ]);
+        },
+      },
+    ];
+  }
 
-      return { totalCount, posts };
-    },
-    [cacheKey],
-    { revalidate: 60, tags: ["comics-feed"] },
-  )();
+  if (filter.translator && filter.translator !== "all") {
+    where.translator = { handle: filter.translator };
+  }
+
+  if (filter.artist && filter.artist !== "all") {
+    originalPostWhere.artist = { handle: filter.artist };
+  }
+
+  // 🌟 LOGIC LỌC TAG (Bao gồm UNTAGGED)
+  if (filter.tag && filter.tag !== "all") {
+    if (filter.tag === "untagged") {
+      originalPostWhere.tags = {
+        none: {
+          tag: {
+            slug: {
+              not: "umamusume",
+            },
+          },
+        },
+      };
+    } else {
+      originalPostWhere.tags = { some: { tag: { slug: filter.tag } } };
+    }
+  }
+
+  if (Object.keys(originalPostWhere).length > 0) {
+    where.originalPost = originalPostWhere;
+  }
+
+  let orderBy: Prisma.TranslatedPostOrderByWithRelationInput = {
+    postedAt: "desc",
+  };
+
+  if (filter.sort === "oldest") orderBy = { postedAt: "asc" };
+  else if (filter.sort === "orig_newest")
+    orderBy = { originalPost: { postedAt: "desc" } };
+  else if (filter.sort === "orig_oldest")
+    orderBy = { originalPost: { postedAt: "asc" } };
+
+  const [totalCount, posts] = await Promise.all([
+    prisma.translatedPost.count({ where }),
+    prisma.translatedPost.findMany({
+      where,
+      skip: (filter.page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      orderBy,
+      include: {
+        translator: true,
+        originalPost: {
+          include: {
+            artist: true,
+            tags: { include: { tag: true } },
+          },
+        },
+      },
+    }),
+  ]);
+
+  return { totalCount, posts };
 };
 
 interface ComicFeedProps {
@@ -198,7 +191,7 @@ export default async function ComicFeed({
   const sortOption = sort || "newest";
   const modeOption = mode || "twitter";
 
-  const { totalCount, posts } = await getCachedPosts({
+  const { totalCount, posts } = await getPosts({
     page: currentPage,
     q: searchQuery,
     tag: tagSlug,
